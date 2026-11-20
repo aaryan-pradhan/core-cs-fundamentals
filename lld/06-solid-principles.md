@@ -1,16 +1,16 @@
 # Lecture 6: SOLID Principles
 
-1. Software development principles are guidelines to follow while building software, so that it is easier to scale and maintain. The five SOLID principles were made popular by the software engineer Robert C. Martin ("Uncle Bob").
+1. **Software development principles** are guidelines for building software. They make it easier to scale and maintain. Robert C. Martin ("Uncle Bob") made the five SOLID principles popular.
    1. **S**: Single Responsibility
    2. **O**: Open-Closed
    3. **L**: Liskov Substitution
    4. **I**: Interface Segregation
    5. **D**: Dependency Inversion
 2. **S: Single Responsibility Principle**
-   1. A class should have a single responsibility: it performs one particular job.
-   2. Put another way, a class should have only **one reason to change**.
-   3. So we segregate different responsibilities into different classes. Whenever we feel a class needs to perform two different tasks, we split it into two classes.
-   4. Example: storing income data and calculating tax are two jobs, so they get two kinds of classes.
+   1. A class has a single responsibility. It performs one particular job.
+   2. In other words, a class has only **one reason to change**.
+   3. Split different responsibilities into different classes. If a class must do two tasks, make two classes.
+   4. **Example:** Storing income data and calculating tax are two jobs. They get two kinds of classes.
 
       ```cpp
       #include <iostream>
@@ -49,11 +49,13 @@
       }
       ```
 
-      1. If tax rules change, only the calculator changes. If the income data format changes, only the income classes change. Each class has one reason to change.
+      1. If tax rules change, only the calculator changes.
+      2. If the income data format changes, only the income classes change.
+      3. Each class has one reason to change.
 3. **O: Open-Closed Principle**
-   1. Classes should be **open for extension, but closed for modification**.
-   2. Why: a class that is well tested and live in production should not be edited to add a new feature. The edit could break the functions already in the class. Instead, we extend its functionality by creating a new class.
-   3. Bad version: every new kind of formatting means editing `TextEditor` itself.
+   1. Classes are **open for extension, but closed for modification**.
+   2. **Why:** A well tested class that is live in production should not be edited for a new feature. The edit could break the functions already in the class. Extend it with a new class instead.
+   3. **Bad version:** Every new kind of formatting means editing `TextEditor` itself.
 
       ```cpp
       class TextEditor {
@@ -64,7 +66,7 @@
       };
       ```
 
-   4. Good version: put an interface between the editor and the formatting. A new kind of formatting is a new class, and `TextEditor` never changes.
+   4. **Good version:** Put an interface between the editor and the formatting. A new kind of formatting is a new class. `TextEditor` never changes.
 
       ```cpp
       #include <iostream>
@@ -104,12 +106,12 @@
       }
       ```
 
-      1. This works because of polymorphism (lecture 3): `Format` takes a base reference, and the virtual call reaches the right `Edit`.
+      1. **Why it works:** This is polymorphism (lecture 3). `Format` takes a base reference, and the virtual call reaches the right `Edit`.
 4. **L: Liskov Substitution Principle**
-   1. If S is a subtype of T, then objects of type T in a program may be replaced with objects of type S without altering any of the desirable properties of that program.
-   2. In simple words: wherever a function expects a base class, passing any derived class must still work correctly, through virtual functions. A derived class must not narrow down the functionality of the base class.
-   3. Good example (cat and dog): `PlaySound(Animal&)` from lecture 3 works for an `Animal`, a `Cat` or a `Dog`. Each one makes a sound, so each is a valid substitute.
-   4. Violation: a subclass that can't do what the base promises.
+   1. **Definition:** If S is a subtype of T, then objects of type T in a program may be replaced with objects of type S without altering any of the desirable properties of that program.
+   2. **In simple words:** Wherever a function expects a base class, any derived class must work correctly through virtual functions. A derived class must not narrow down the functionality of the base class.
+   3. **Good example (cat and dog):** `PlaySound(Animal&)` from lecture 3 works for an `Animal`, a `Cat` or a `Dog`. Each one makes a sound, so each is a valid substitute.
+   4. **Violation:** A subclass cannot do what the base promises.
 
       ```cpp
       class Bird {
@@ -125,11 +127,14 @@
       void MakeItFly(Bird& bird) { bird.Fly(); }   // breaks when given a Penguin
       ```
 
-   5. Fix: model the hierarchy on what each class really can do. Put `Fly()` only on a `FlyingBird` subclass, so `Penguin` inherits from `Bird` and never promises to fly.
-   6. Quick test: if a derived class has to throw "not supported", do nothing, or need a type check (`if (dynamic_cast<Penguin*>(...))`) to behave, it is breaking Liskov.
+   5. **Fix:** Model the hierarchy on what each class really can do. Put `Fly()` only on a `FlyingBird` subclass. Then `Penguin` inherits from `Bird` and never promises to fly.
+   6. **Quick test:** A derived class breaks Liskov in any of these cases.
+      - It has to throw "not supported".
+      - It does nothing.
+      - It needs a type check (`if (dynamic_cast<Penguin*>(...))`) to behave.
 5. **I: Interface Segregation Principle**
-   1. Clients should not be forced to depend on methods that they do not use.
-   2. Problem: one fat interface for every shape.
+   1. Clients are not forced to depend on methods that they do not use.
+   2. **Problem:** One fat interface for every shape.
 
       ```cpp
       class ShapeInterface {
@@ -148,8 +153,9 @@
       };
       ```
 
-      1. `Square` is forced to implement `GetVol()`. It must either fake it (return 0, which is a lie) or stay abstract and unusable.
-   3. Solution: segregate `ShapeInterface` into two smaller interfaces. Each class implements only what it really supports.
+      1. `Square` is forced to implement `GetVol()`.
+      2. It must either fake it (return 0, which is a lie) or stay abstract and unusable.
+   3. **Solution:** Segregate `ShapeInterface` into two smaller interfaces. Each class implements only what it really supports.
 
       ```cpp
       #include <iostream>
@@ -193,10 +199,13 @@
       ```
 
 6. **D: Dependency Inversion Principle**
-   1. High-level modules should not depend on low-level modules. Both should depend on the abstraction.
-   2. Abstractions should not depend on details. Details should depend on abstractions.
-   3. Picture it: a high-level class A (business logic) used to point straight at a low-level class B (a concrete detail). Cross that arrow out. Now A depends on an interface, and B implements that interface. The dependency arrow from B now points up to the abstraction. That reversal is the "inversion".
-   4. Example: a laptop shouldn't be hard-wired to one mouse model. It depends on `MouseInterface` and `KeyboardInterface`. Wired and wireless devices implement those interfaces.
+   1. High-level modules do not depend on low-level modules. Both depend on the abstraction.
+   2. Abstractions do not depend on details. Details depend on abstractions.
+   3. **Picture it:**
+      - A high-level class A (business logic) used to point straight at a low-level class B (a concrete detail).
+      - Cross that arrow out. Now A depends on an interface, and B implements that interface.
+      - The dependency arrow from B now points up to the abstraction. That reversal is the "inversion".
+   4. **Example:** A laptop is not hard-wired to one mouse model. It depends on `MouseInterface` and `KeyboardInterface`. Wired and wireless devices implement those interfaces.
 
    ```mermaid
    classDiagram
@@ -273,5 +282,5 @@
    }
    ```
 
-   5. The concrete devices are passed in from outside through the constructor. This is called **dependency injection**, and it is the usual way to apply D. Swapping a wired mouse for a wireless one changes `main`, never `Laptop`.
-7. **One idea under all five**: depend on interfaces, keep each class small and single-purpose, and add features by adding classes. Design patterns are ready-made recipes that apply exactly these principles, starting with the Factory pattern.
+   5. **Dependency injection:** The concrete devices are passed in from outside through the constructor. This is the usual way to apply D. Swapping a wired mouse for a wireless one changes `main`, never `Laptop`.
+7. **One idea under all five:** Depend on interfaces. Keep each class small and single-purpose. Add features by adding classes. Design patterns are ready-made recipes that apply exactly these principles. The Factory pattern is first.
