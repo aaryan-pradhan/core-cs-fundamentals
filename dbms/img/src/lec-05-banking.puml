@@ -1,0 +1,57 @@
+@startdot
+graph G {
+  bgcolor=white; layout=neato; overlap=false; splines=true; sep="+12";
+  node [fontname="Helvetica", fontsize=12]; edge [fontname="Helvetica", fontsize=11];
+
+  // Entities
+  node [shape=box];
+  Branch; Customer; Employee; Account; Savings [label="Savings\nAccount"]; Current [label="Current\nAccount"]; Loan;
+  Payment [peripheries=2];
+
+  // Relationships
+  node [shape=diamond];
+  borrow; origin [label="originated\nby"]; deposit; banker; managed [label="managed\nby"];
+  lpay [label="loan\npayment", peripheries=2];
+  isa [shape=invtriangle, label="is a", fontsize=10];
+
+  // Attributes
+  node [shape=ellipse];
+  b_name [label=<<u>name</u>>]; b_city [label="city"]; b_assets [label="assets"]; b_liab [label="liabilities"];
+  c_id [label=<<u>customer id</u>>]; c_name [label="name"]; c_addr [label="address"];
+  c_street [label="street"]; c_sname [label="street name"]; c_snum [label="street number"];
+  c_acity [label="city"]; c_state [label="state"]; c_zip [label="zip code"];
+  c_contact [label="contact number", peripheries=2]; c_dob [label="date of birth"]; c_age [label="age", style=dashed];
+  e_id [label=<<u>employee id</u>>]; e_name [label="name"]; e_contact [label="contact number"];
+  e_dep [label="dependent name", peripheries=2]; e_start [label="start date"]; e_yos [label="years of service", style=dashed];
+  a_num [label=<<u>account number</u>>]; a_bal [label="balance"];
+  s_rate [label="interest rate"]; s_limit [label="daily withdrawal\nlimit"];
+  cu_charge [label="transaction\ncharges"]; cu_od [label="overdraft\namount"];
+  l_num [label=<<u>loan number</u>>]; l_amt [label="amount"];
+  p_num [label=<<table border="0" cellborder="0" cellpadding="0"><tr><td sides="b" border="1" style="dashed">payment number</td></tr></table>>];
+
+  // Attribute edges
+  Branch -- {b_name b_city b_assets b_liab};
+  Customer -- {c_id c_name c_addr c_contact c_dob c_age};
+  c_addr -- {c_street c_acity c_state c_zip}; c_street -- {c_sname c_snum};
+  Employee -- {e_id e_name e_contact e_dep e_start e_yos};
+  Account -- {a_num a_bal};
+  Savings -- {s_rate s_limit}; Current -- {cu_charge cu_od};
+  Loan -- {l_num l_amt};
+  Payment -- p_num;
+
+  // Relationship edges (double line = total participation)
+  Customer -- borrow [label="M"];
+  borrow -- Loan [label="N", color="black:invis:black"];
+  Loan -- origin [label="N", color="black:invis:black"];
+  origin -- Branch [label="1"];
+  Loan -- lpay [label="1"];
+  lpay -- Payment [label="N", color="black:invis:black"];
+  Customer -- deposit [label="M"];
+  deposit -- Account [label="N"];
+  Customer -- banker [label="N"];
+  banker -- Employee [label="1"];
+  Employee:e -- managed:n [label="N  worker"];
+  managed:s -- Employee:s [label="1  manager"];
+  Account -- isa [len=0.5]; isa -- Savings [len=0.7]; isa -- Current [len=0.7];
+}
+@enddot

@@ -74,6 +74,8 @@
 6. **Generalization:** Make Account the generalized entity.
    - The common attributes (account number, balance) go on Account.
    - The overlapping ones are deleted from savings and current account. They keep only their specific attributes.
+
+   ![Account generalised from Savings Account and Current Account](img/lec-05-account-generalisation.svg)
 7. **Loan:** loan number (loan id) as primary key, and amount.
 8. **Payment:** a weak entity. It is associated with a loan. Loan together with payment number identifies it. The payment number is the partial key.
 
@@ -116,17 +118,7 @@
 7. **Weak relationship:** It is shown between the weak entity (payment) and its strong entity (loan). Payment has no primary key of its own. The loan number primary key is used for it.
 8. **Unary relationship:** It is shown as employee manages employee. N employees are managed by one employee. One employee manages N employees.
 
-```mermaid
-erDiagram
-    CUSTOMER }o--|{ LOAN : borrow
-    LOAN }o--|| BRANCH : "originated by"
-    LOAN ||--o{ PAYMENT : "loan payment"
-    CUSTOMER }o--o{ ACCOUNT : deposit
-    CUSTOMER }o--|| EMPLOYEE : banker
-    EMPLOYEE }o--o| EMPLOYEE : "managed by"
-    ACCOUNT ||--o| SAVINGS_ACCOUNT : "is a"
-    ACCOUNT ||--o| CURRENT_ACCOUNT : "is a"
-```
+![Banking system ER diagram in Chen notation](img/lec-05-banking.svg)
 
 ## Homework
 

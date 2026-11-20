@@ -1,0 +1,14 @@
+@startdot
+graph G {
+  bgcolor=white; node [fontname="Helvetica", fontsize=12];
+  node [shape=box]; Account; Savings [label="Savings Account"]; Current [label="Current Account"];
+  isa [shape=invtriangle, label="is a", fontsize=10];
+  node [shape=ellipse];
+  a_num [label=<<u>account number</u>>]; a_bal [label="balance"];
+  s_rate [label="interest rate"]; s_limit [label="daily withdrawal limit"];
+  cu_charge [label="transaction charges"]; cu_od [label="overdraft amount"];
+  a_num -- Account; a_bal -- Account;
+  Account -- isa; isa -- Savings; isa -- Current;
+  Savings -- s_rate; Savings -- s_limit; Current -- cu_charge; Current -- cu_od;
+}
+@enddot
