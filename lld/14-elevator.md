@@ -1,34 +1,43 @@
 # Lecture 14: Design an Elevator System
 
 1. **Requirements**
-   1. A building with multiple floors.
-   2. Support for multiple elevators.
-   3. Movement of an elevator: up, down or idle.
-   4. External displays and buttons at every floor:
-      1. Input: up or down.
-      2. Display: the direction and current floor of the elevator.
-   5. Internal display and buttons inside each elevator:
-      1. Input: the destination floor number.
-      2. Display: the direction and current floor.
-   6. Maximum capacity: a weight limit per elevator.
-   7. Door handling: the door opens at a stop and closes after a timeout.
+   1. **Building:** A building with multiple floors.
+   2. **Elevators:** Support for multiple elevators.
+   3. **Movement:** An elevator moves up, moves down or stays idle.
+   4. **External displays and buttons:** Every floor has them.
+      1. **Input:** Up or down.
+      2. **Display:** The direction and current floor of the elevator.
+   5. **Internal display and buttons:** Each elevator has them inside.
+      1. **Input:** The destination floor number.
+      2. **Display:** The direction and current floor.
+   6. **Maximum capacity:** Each elevator has a weight limit.
+   7. **Door handling:** The door opens at a stop and closes after a timeout.
+
 2. **Entities**
-   1. `ElevatorSystem`: the software that runs everything. It knows the building and the elevators, and decides which elevator goes where.
-   2. `Building`: name, address and its floors.
-   3. `Floor`: floor number, an external display, and up/down buttons.
-   4. `Elevator`: current floor, movement, an internal display, floor buttons, a weight machine, and its own queue of stops.
-   5. `Movement`: an enum with `UP`, `DOWN` and `IDLE`.
-   6. `Display` (interface): with `ExternalDisplay` (on a floor) and `InternalDisplay` (in a car).
-   7. `Button` (interface): with `FloorButton` (↑ ↓) and `ElevatorButton` (1, 2, 3, …). They are different kinds of input with one common shape.
-   8. `WeightMachine`: reports the current load, so the elevator refuses to move when it is over the limit.
-   9. `SchedulingStrategy` (interface): the algorithm that picks the next stop. There are several (FCFS, SCAN, LOOK, SSTF), and the system chooses one at runtime. This is the Strategy pattern from lecture 9.
+
+   | Entity | Role |
+   |--------|------|
+   | `ElevatorSystem` | The software that runs everything. It knows the building and the elevators, and decides which elevator goes where. |
+   | `Building` | Name, address and its floors. |
+   | `Floor` | Floor number, an external display, and up/down buttons. |
+   | `Elevator` | Current floor, movement, an internal display, floor buttons, a weight machine, and its own queue of stops. |
+   | `Movement` | An enum with `UP`, `DOWN` and `IDLE`. |
+   | `Display` (interface) | Has `ExternalDisplay` (on a floor) and `InternalDisplay` (in a car). |
+   | `Button` (interface) | Has `FloorButton` (↑ ↓) and `ElevatorButton` (1, 2, 3, …). They are different kinds of input with one common shape. |
+   | `WeightMachine` | Reports the current load. The elevator refuses to move when it is over the limit. |
+   | `SchedulingStrategy` (interface) | The algorithm that picks the next stop. There are several (FCFS, SCAN, LOOK, SSTF). The system chooses one at runtime. This is the Strategy pattern from lecture 9. |
+
 3. **Relations**
-   1. `Building` → `Floor`: **composition**. Floors don't exist without the building.
-   2. `Floor` → `ExternalDisplay`, `FloorButton`: **composition**. Seen as software that drives the display, rather than the physical panel, this could also be argued as association.
-   3. `Elevator` → `InternalDisplay`, `ElevatorButton`, `WeightMachine`: **composition**.
-   4. `ElevatorSystem` → `Building`, `Elevator`: **association**. The software uses them, and they exist physically on their own.
-   5. `ExternalDisplay` and `InternalDisplay` IS-A `Display`. `FloorButton` and `ElevatorButton` IS-A `Button`. Both are **inheritance** from an interface.
-   6. `ElevatorSystem` → `SchedulingStrategy`: **aggregation**. The strategy can be swapped without touching the system.
+
+   | Relation | Type | Why |
+   |----------|------|-----|
+   | `Building` to `Floor` | **Composition** | Floors do not exist without the building. |
+   | `Floor` to `ExternalDisplay`, `FloorButton` | **Composition** | Seen as software that drives the display, rather than the physical panel, this could also be argued as association. |
+   | `Elevator` to `InternalDisplay`, `ElevatorButton`, `WeightMachine` | **Composition** | They are parts of the elevator. |
+   | `ElevatorSystem` to `Building`, `Elevator` | **Association** | The software uses them, and they exist physically on their own. |
+   | `ExternalDisplay`, `InternalDisplay` IS-A `Display`; `FloorButton`, `ElevatorButton` IS-A `Button` | **Inheritance** | Both are inheritance from an interface. |
+   | `ElevatorSystem` to `SchedulingStrategy` | **Aggregation** | The strategy can be swapped without touching the system. |
+
 4. **UML class diagram**
 
    ```mermaid
@@ -98,12 +107,13 @@
    ```
 
 5. **Two queues**
-   1. **Scheduler queue**: the requests from external users (floor buttons, like "0 ↑" or "2 ↓"). It is shared by the whole system.
-   2. **Dispatcher queue**: one per elevator. It holds the floors that this elevator has committed to stop at, including the destinations pressed inside it.
-   3. Flow: a floor request enters the scheduler queue. The system hands it to one elevator, and it moves into that elevator's dispatcher queue. Once an elevator's dispatcher queue is empty, the elevator is free to serve another floor.
+   1. **Scheduler queue:** It holds the requests from external users (floor buttons, like "0 ↑" or "2 ↓"). The whole system shares it.
+   2. **Dispatcher queue:** There is one per elevator. It holds the floors that this elevator has committed to stop at, including the destinations pressed inside it.
+   3. **Flow:** A floor request enters the scheduler queue. The system hands it to one elevator, and it moves into that elevator's dispatcher queue. Once an elevator's dispatcher queue is empty, the elevator is free to serve another floor.
+
 6. **Multiple elevators: synchronization**
-   1. With several elevators reading the common scheduler queue, two of them could read the same request and both go to that floor, which is bad.
-   2. Fix: after reading a request, pop it out of the queue first, and make "read + pop" one atomic step guarded by a **mutex** lock. Only one elevator can take a given request.
+   1. **Problem:** Several elevators read the common scheduler queue. Two of them could read the same request and both go to that floor. That is bad.
+   2. **Fix:** After reading a request, pop it out of the queue first. Make "read + pop" one atomic step guarded by a **mutex** lock. Only one elevator can take a given request.
 
       ```cpp
       #include <mutex>
@@ -140,26 +150,29 @@
       ```
 
 7. **Scheduling algorithms**
-   1. **FCFS (first come, first served)**: serve requests in arrival order (FIFO). It is the brute-force version.
-      1. Example: two people get in at floor 0. One wants floor 2 and the other wants 5. At floor 2 a new person gets in and wants floor 4.
-      2. FCFS goes 0 → 2 → 5 → 4. It passes floor 4 on the way up, then comes back down for it. Simple, but not optimal.
-      3. A smarter elevator goes 0 → 2 → 4 → 5, picking up stops on its way up. This is what SCAN and LOOK do.
-   2. **SCAN**: the elevator moves fully in one direction to the **end** (the top floor), serving every request on the way, then reverses and goes fully down. It is like a disk head sweeping. It is not very efficient, because it travels to the top even when nobody is there.
-   3. **LOOK**: like SCAN, but it moves only until the **last request** in the current direction, then reverses. Once there are no more upward requests above it, it comes down and keeps going down while there are requests below. This avoids the empty trips to the ends.
-   4. **SSTF (shortest seek time first)**: the elevator always serves the request with the shortest travel distance from where it is now.
-      1. Disadvantage: **starvation**. If floors 1–3 are the most populated, the elevator keeps serving them, and a lone request at floor 10 may never be reached.
-      2. Fix: a **waiting timeout** (for example 30 minutes, or a few seconds in the demo below). Once a request has waited longer than the timeout, it is served first, regardless of distance.
-      3. For implementation, we can use a priority queue ordered by (timed out first, then distance). Distance changes as the elevator moves, so the queue must be rebuilt at each stop. For a handful of requests, a simple scan does the same job.
-   5. Comparison:
+   1. **FCFS (first come, first served):** Serve requests in arrival order (FIFO). It is the brute-force version.
+      1. **Example:** Two people get in at floor 0. One wants floor 2 and the other wants 5. At floor 2 a new person gets in and wants floor 4.
+      2. **FCFS path:** It goes floor 0, then 2, then 5, then 4. It passes floor 4 on the way up, then comes back down for it. This is simple, but not optimal.
+      3. **Smarter path:** A smarter elevator goes floor 0, then 2, then 4, then 5, picking up stops on its way up. This is what SCAN and LOOK do.
+   2. **SCAN:** The elevator moves fully in one direction to the **end** (the top floor), serving every request on the way. Then it reverses and goes fully down.
+      - **Analogy:** A disk head sweeping.
+      - **Weakness:** It is not very efficient, because it travels to the top even when nobody is there.
+   3. **LOOK:** It works like SCAN, but it moves only until the **last request** in the current direction, then reverses. Once there are no more upward requests above it, it comes down and keeps going down while there are requests below. This avoids the empty trips to the ends.
+   4. **SSTF (shortest seek time first):** The elevator always serves the request with the shortest travel distance from where it is now.
+      1. **Disadvantage:** **Starvation**. If floors 1–3 are the most populated, the elevator keeps serving them. A lone request at floor 10 may never be reached.
+      2. **Fix:** A **waiting timeout** (for example 30 minutes, or a few seconds in the demo below). Once a request has waited longer than the timeout, it is served first, regardless of distance.
+      3. **Implementation:** Use a priority queue ordered by (timed out first, then distance). Distance changes as the elevator moves, so the queue must be rebuilt at each stop. For a handful of requests, a simple scan does the same job.
+   5. **Comparison:**
 
-   | Algorithm | Picks next | Good | Bad |
-   |---|---|---|---|
-   | FCFS | oldest request | simple, fair | lots of back-and-forth |
-   | SCAN | next request in direction, goes to the end | no starvation | empty trips to top and bottom |
-   | LOOK | next request in direction, turns at the last request | no empty trips | slightly more logic |
-   | SSTF | nearest request | least travel | starvation without a timeout |
+      | Algorithm | Picks next | Good | Bad |
+      |---|---|---|---|
+      | FCFS | oldest request | simple, fair | lots of back-and-forth |
+      | SCAN | next request in direction, goes to the end | no starvation | empty trips to top and bottom |
+      | LOOK | next request in direction, turns at the last request | no empty trips | slightly more logic |
+      | SSTF | nearest request | least travel | starvation without a timeout |
 
-   6. Choosing between these algorithms is a research-level problem. In an interview, show that the algorithm is swappable (Strategy pattern) and explain the trade-offs. You don't need the perfect algorithm.
+   > **Interview:** Choosing between these algorithms is a research-level problem. Show that the algorithm is swappable (Strategy pattern) and explain the trade-offs. You do not need the perfect algorithm.
+
 8. **Code: swappable scheduling, with SSTF and a starvation timeout**
 
    ```cpp
@@ -243,13 +256,13 @@
    }
    ```
 
-   1. `Elevator` never knows which algorithm it runs. Swapping `FCFS` for `SSTF`, or adding `LOOK`, changes only the object passed in.
-   2. The first two runs show the 0 → 2 → 5 → 4 example: FCFS needs 10 time units, and SSTF needs 5.
-   3. The last two runs show starvation and its fix. Without a timeout, floor 10 waits until the busy floors go quiet. With a timeout, it jumps the queue once it has waited long enough.
+   1. **Algorithm hiding:** `Elevator` never knows which algorithm it runs. Swapping `FCFS` for `SSTF`, or adding `LOOK`, changes only the object passed in.
+   2. **First two runs:** They show the example of floors 0, 2, 5, 4. FCFS needs 10 time units, and SSTF needs 5.
+   3. **Last two runs:** They show starvation and its fix. Without a timeout, floor 10 waits until the busy floors go quiet. With a timeout, it jumps the queue once it has waited long enough.
 9. **Wrapping up the course**
    1. All three case studies use the same toolkit:
-      1. Classes with one job each (lectures 1 and 6).
-      2. Relationships chosen by the composition, aggregation and association rules (lecture 4).
-      3. A UML diagram before code (lecture 5).
-      4. An interface wherever behaviour varies, with a pattern when it fits: strategy for payments and scheduling, singleton for the one shared lot or logger (lectures 7–10).
-   2. For more practice, take Snake & Ladder or a booking system through the steps in lecture 11.
+      1. **Classes:** One job each (lectures 1 and 6).
+      2. **Relationships:** Chosen by the composition, aggregation and association rules (lecture 4).
+      3. **UML:** A diagram before code (lecture 5).
+      4. **Interfaces and patterns:** An interface wherever behaviour varies, with a pattern when it fits. Strategy fits payments and scheduling. Singleton fits the one shared lot or logger (lectures 7–10).
+   2. **More practice:** Take Snake & Ladder or a booking system through the steps in lecture 11.
