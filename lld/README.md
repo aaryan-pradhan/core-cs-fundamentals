@@ -1,0 +1,16 @@
+# Low Level Design
+
+- [Lecture 1: Classes, Objects, Constructors and Destructors](01-classes-and-objects.md)
+- [Lecture 2: Inheritance](02-inheritance.md)
+- [Lecture 3: Polymorphism, Virtual Functions and Abstraction](03-polymorphism.md)
+- [Lecture 4: Object Relationships](04-object-relationships.md)
+- [Lecture 5: UML Class Diagrams](05-uml-class-diagrams.md)
+- [Lecture 6: SOLID Principles](06-solid-principles.md)
+- [Lecture 7: Design Patterns and the Factory Pattern](07-factory-pattern.md)
+- [Lecture 8: Singleton Pattern](08-singleton-pattern.md)
+- [Lecture 9: Strategy Pattern](09-strategy-pattern.md)
+- [Lecture 10: Decorator Pattern](10-decorator-pattern.md)
+- [Lecture 11: How to Approach LLD Questions](11-approaching-lld-questions.md)
+- [Lecture 12: Design Tic-Tac-Toe](12-tic-tac-toe.md)
+- [Lecture 13: Design a Parking Lot](13-parking-lot.md)
+- [Lecture 14: Design an Elevator System](14-elevator.md)
