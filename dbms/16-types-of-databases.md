@@ -8,6 +8,20 @@ They are based on the relational model.
 - **Relations:** They are established through foreign keys. Referential integrity and many constraints apply.
 - **Popular:** Relational databases are quite **popular**, even though the system was designed in the 1970s. They are also known as relational database management systems (RDBMS). They commonly use **Structured Query Language (SQL)** to **create**, **read**, **update**, and **delete** data.
 - **Discrete tables:** Information is stored in tables that can be **JOIN**ed by fields known as **foreign** keys. For example, a User table joins to a Purchases table of all purchases the users made. Meaningful data is pulled out by establishing relations with joins.
+
+```mermaid
+erDiagram
+  USER ||--o{ PURCHASES : "makes"
+  USER {
+    int user_id PK
+    string name
+  }
+  PURCHASES {
+    int purchase_id PK
+    int user_id FK
+    string item
+  }
+```
 - **Examples:** MySQL, Microsoft SQL Server, Oracle.
 
 **Advantages:**
@@ -44,6 +58,25 @@ The object-oriented data model is based on the **object-oriented-programming par
   - **Object identity:** Each object represents itself. A Student object represents that it is a student.
   - **Encapsulation:** Hide some attributes of an object and expose others.
   - **Methods:** They provide the interface to the object.
+
+```mermaid
+classDiagram
+  Person <|-- Student
+  Person <|-- Professor
+  class Person {
+    name
+    gender
+    age
+  }
+  class Student {
+    rollNumber
+    marks
+    isPassed()
+  }
+  class Professor {
+    subject
+  }
+```
 - **Structured:** The object model stores a collection of structured data. A structure is needed (a student must have a name and so on) before the data is stored.
 
 **When to move to it:** A relational database can be very complex, with multiple relations, and maintaining them can be tedious. The relational model's problem arises exactly when establishing and maintaining relations becomes hard. Then one can shift to an object-oriented database.
@@ -58,6 +91,13 @@ The object-oriented data model is based on the **object-oriented-programming par
 4. `isPassed` may hold an algorithm that checks the student's past records in the DB (passed in 2021 or 2010, how many subjects failed). It can also give the dates a student took leave.
 5. Personal information the university knows but the professor should not see can be hidden.
 6. A Person lives somewhere. The address is stored as another object, and the Person calls a method such as `getAddress`. Objects interact with other objects through methods.
+
+```mermaid
+flowchart LR
+  P["Professor object"] -- "calls isPassed()" --> S["Student object<br/>(marks, average hidden)"]
+  S -- "is a" --> Pe["Person"]
+  Pe -- "getAddress()" --> A["Address object"]
+```
 
 ### a. Advantages
 
@@ -103,6 +143,16 @@ The schema is defined by its **tree-like** organisation. A **root** "parent" dir
 - **Retrieval:** It requires traversing the tree, starting at the root node.
 - **Electronics shop example:** Table Electronics holds Phones, TVs, Washing Machines. Phones hold, for example, Samsung phones. To list all types of TV, traverse from the root down to TVs, then LCD and LED, and print their records. Retrieving top-down like this is the use case.
 
+```mermaid
+flowchart TB
+  E["Electronics (root)"] --> Ph["Phones"]
+  E --> TV["TVs"]
+  E --> WM["Washing Machines"]
+  Ph --> Sa["Samsung phones"]
+  TV --> LCD["LCD"]
+  TV --> LED["LED"]
+```
+
 **Physical model:** The **disk storage system** is also inherently hierarchical, so these models can be used as physical models.
 
 - **Schemas:** The conceptual (logical) schema says how data is related and what it is. The physical schema says how it is stored on disk. There is also the view schema.
@@ -142,5 +192,14 @@ A network database is an **extension** of the hierarchical database. It is still
 - **Market:** Relational and NoSQL databases are the ones used. Cloud-heavy companies use NoSQL (such as MongoDB) a lot.
 - **Know every type:** When the use case comes, its advantages and disadvantages, which has better market support, and what you would pick for your own software.
 - **Rule:** If the structure is only tree-like and siblings have no relation, use a hierarchical DB. If there are multiple parents (graph-like structure), use a network DB.
+
+```mermaid
+flowchart TB
+  Q{"Shape of the data?"}
+  Q -- "tree, one parent per child" --> H["Hierarchical DB"]
+  Q -- "multiple parents (graph)" --> N["Network DB"]
+  Q -- "tables, M:N relations" --> R["Relational DB"]
+  Q -- "flexible, scale out" --> NS["NoSQL DB"]
+```
 
 > **Interview:** You may be asked what relational and NoSQL databases are, and what other databases exist. Have at least a rough idea of the rest.
