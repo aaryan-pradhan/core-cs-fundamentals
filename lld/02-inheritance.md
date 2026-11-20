@@ -1,9 +1,9 @@
 # Lecture 2: Inheritance
 
 1. **What is inheritance?**
-   1. Inheritance is a mechanism in which one class acquires all the properties (data) and behaviours (functions) of a parent class.
-   2. It represents an **IS-A** relationship: an Employee is a Person, a SoftwareEngineer is an Employee.
-   3. Why we need it: without inheritance, every class repeats the members of the classes above it.
+   1. Inheritance is a mechanism where one class acquires all the properties (data) and behaviours (functions) of a parent class.
+   2. It represents an **IS-A** relationship. An Employee is a Person. A SoftwareEngineer is an Employee.
+   3. **Why we need it:** Without inheritance, every class repeats the members of the classes above it.
 
       ```cpp
       class Person {
@@ -32,10 +32,11 @@
       };
       ```
 
-      1. Without inheritance, `SoftwareEngineer` would have to declare all 13 members itself, and so would every other kind of employee. A change to `Person` would have to be copied everywhere.
+      1. Without inheritance, `SoftwareEngineer` would declare all 13 members itself. So would every other kind of employee.
+      2. A change to `Person` would have to be copied everywhere.
 2. **Terminology**
-   1. The class being inherited from is the **base class** (also parent or superclass). Here, `Person`.
-   2. The class that inherits is the **derived class** (also child or subclass). Here, `Employee`.
+   1. **Base class:** The class being inherited from. It is also called parent or superclass. Here it is `Person`.
+   2. **Derived class:** The class that inherits. It is also called child or subclass. Here it is `Employee`.
 
    ```mermaid
    classDiagram
@@ -44,9 +45,9 @@
    ```
 
 3. **Order of construction and destruction**
-   1. A derived object contains a base part inside it. The base part must exist before the derived part can be built on top of it.
-   2. So the **most base class is constructed first**, and the **most derived class is destructed first**. Destruction is the exact mirror image of construction.
-      1. Chain Base1, Base2, Derived: constructors run Base1, Base2, Derived. Destructors run Derived, Base2, Base1.
+   1. A derived object contains a base part inside it. The base part must exist before the derived part is built on top of it.
+   2. So the **most base class is constructed first**. The **most derived class is destructed first**. Destruction is the exact mirror image of construction.
+      1. **Example:** For the chain Base1, Base2, Derived, constructors run Base1, Base2, Derived. Destructors run Derived, Base2, Base1.
 
       ```cpp
       #include <iostream>
@@ -75,9 +76,13 @@
       ```
 
 4. **Access specifiers**
-   1. **Public**: can be accessed by anybody.
-   2. **Private**: can be accessed only by the class's own members. Not even derived classes can see it.
-   3. **Protected**: can be accessed by the class's own members and by derived classes, but not from outside.
+
+   | Specifier | Who can access it |
+   |-----------|-------------------|
+   | **Public** | Anybody. |
+   | **Private** | Only the class's own members. Not even derived classes can see it. |
+   | **Protected** | The class's own members and derived classes. Not code outside. |
+
 5. **Three kinds of inheritance**
    1. The keyword in `class B : public A` controls how A's members appear inside B, and to anyone using B.
    2. A's private members are never accessible in B, whichever kind is used. They still exist inside the object. A's own public functions can still use them.
@@ -88,13 +93,13 @@
    | protected | protected in B | protected in B | private in B |
    | private | not accessible | not accessible | not accessible |
 
-   3. So for `B b;` in `main()`:
-      1. With public inheritance, `b.a_public_` works. `b.a_protected_` and `b.a_private_` don't compile.
-      2. With private or protected inheritance, none of the three compile from `main()`. Inside B's own functions, `a_public_` and `a_protected_` are still accessible.
+   3. Take `B b;` in `main()`.
+      1. **Public inheritance:** `b.a_public_` works. `b.a_protected_` and `b.a_private_` do not compile.
+      2. **Private or protected inheritance:** None of the three compile from `main()`. Inside B's own functions, `a_public_` and `a_protected_` are still accessible.
    4. **Public inheritance is the one used in practice.** It is the only one that models IS-A. The other two exist mostly for theory.
 6. **Best practice: construct the base from the derived constructor**
-   1. From the constructor of the derived class, call the constructor of the base class in the initializer list.
-   2. Each constructor takes care of initializing its own class's members. The derived class doesn't touch the base's members directly, and it can't if they are private.
+   1. In the derived constructor, call the base class constructor in the initializer list.
+   2. Each constructor initializes its own class's members. The derived class does not touch the base's members directly. It cannot if they are private.
 
       ```cpp
       #include <iostream>
@@ -138,7 +143,7 @@
 
 7. **Name hiding: the closest scope wins**
    1. If the derived class declares a member with the same name as a base member, the derived one **hides** the base one inside the derived class.
-   2. Say B declares its own `int a_public_;` and sets it from a fourth parameter: `B(int a, int b, int c, int d) : A(a, b, c), a_public_(d) {}`. Then inside B, `a_public_` means B's copy:
+   2. **Example:** B declares its own `int a_public_;` and sets it from a fourth parameter: `B(int a, int b, int c, int d) : A(a, b, c), a_public_(d) {}`. Inside B, `a_public_` now means B's copy.
 
       ```cpp
       void PrintB() {
@@ -147,9 +152,9 @@
       }
       ```
 
-      1. A's copy is still there and can be reached as `A::a_public_`.
-   3. The same rule applies to function calls. Say the base has `A()`, `B()`, `C()` and the derived class has `A()`, `D()`, `E()`. For `Derived D;`:
+      1. A's copy is still there. It can be reached as `A::a_public_`.
+   3. The same rule applies to function calls. Say the base has `A()`, `B()`, `C()` and the derived class has `A()`, `D()`, `E()`. Take `Derived D;`.
       1. `D.D()` is found in Derived.
       2. `D.B()` is not in Derived, so lookup moves up and finds it in Base.
-      3. `D.A()` exists in both. The search starts from the most derived class and stops at the first match, so Derived's `A()` runs.
-8. Next: we can call Derived's functions on a Derived object. But code that only knows "this is some Person" has a Base pointer or reference. Which function runs then is the question polymorphism answers.
+      3. `D.A()` exists in both. The search starts from the most derived class and stops at the first match. So Derived's `A()` runs.
+8. **Why polymorphism comes next:** We can call Derived's functions on a Derived object. But code that only knows "this is some Person" holds a Base pointer or reference. Which function runs then is the question polymorphism answers.
