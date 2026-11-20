@@ -57,6 +57,20 @@ An RDBMS has a pre-defined schema. This is an issue when we lack some data or ne
 | Layout | A user table (id, first name, last name, cell, city), plus a separate hobbies table (user id, hobby) after normalisation. Hobby is a multi-valued attribute. | One object `{ id: 1, firstName, lastName, cell, city, hobbies: [ ... ] }`. Hobbies are stored as an array. |
 | Result | Data is split across two tables and needs a join. | Everything comes together, so no join is needed. |
 
+```mermaid
+flowchart LR
+  subgraph SQL["SQL: two tables, joined on user id"]
+    direction TB
+    U["user<br/>id | first name | last name | cell | city"]
+    H["hobbies<br/>user id | hobby"]
+    H -- "FK user id" --> U
+  end
+  subgraph NoSQL["NoSQL: one document"]
+    direction TB
+    D["{ id: 1, firstName, lastName,<br/>cell, city,<br/>hobbies: [ ... ] }"]
+  end
+```
+
 - **Drawback:** For even a small piece of information, you must load the whole object into the application. In SQL you could fetch just the needed column or table.
 - **Missing fields:** If an entry has no hobbies, no city and no cell number, SQL stores null null null and wastes some space. In NoSQL you create another object without those fields, and nothing is stored for them. This is flexible schema, the biggest advantage.
 
@@ -76,11 +90,30 @@ An RDBMS has a pre-defined schema. This is an issue when we lack some data or ne
 | Used by | SQL generally scales this way. | NoSQL. |
 | Cost | Always costly. | Many small cheap systems (such as 1 GB RAM each) are more cost efficient. |
 
+```mermaid
+flowchart LR
+  subgraph V["Vertical: scale up"]
+    direction LR
+    N1["Node<br/>1 TB disk"] -- "upgrade RAM, CPU, disk" --> N2["Same node<br/>10 TB disk"]
+  end
+  subgraph H["Horizontal: scale out"]
+    direction LR
+    A["Node 1<br/>old data"] --- B["Node 2<br/>new data"] --- C["Node 3<br/>new data"]
+  end
+```
+
 > **Interview:** Why can't SQL do horizontal scaling? It is possible but not practical.
 
 - **Tables on separate systems:** T1, T2, T3 sit on System 1, 2, 3. In an extreme case they are in different countries.
 - **Join problem:** Meaningful data needs joins on T1, T2, T3. The tables are logically one storage, so all three must first be brought to one node (say System 4) over the network. A join cannot run on half the data.
 - **Slow:** Moving tables over the network is slow, and then the join takes time.
+
+```mermaid
+flowchart LR
+  S1["System 1: T1"] -- "network" --> S4["System 4<br/>JOIN T1, T2, T3"]
+  S2["System 2: T2"] -- "network" --> S4
+  S3["System 3: T3"] -- "network" --> S4
+```
 - **Unsuitable cases:** Opening a WhatsApp chat and wanting the last two days of chats instantly cannot use SQL. The data is scattered. Structured data must be fetched, un-structured, spread over the message, and then shown. That is very costly in time complexity.
 - **NoSQL answer:** Store the data as a document. Redundancy is fine, with no normalisation load. Put related data in one bunch (student, department and branch info together).
 - **Self-contained object:** All information is in one object, not coupled relationally, so it can be distributed across nodes. There is no join and no separate JSON object linked by relation.
@@ -88,6 +121,12 @@ An RDBMS has a pre-defined schema. This is an issue when we lack some data or ne
 Scaling horizontally is achieved through **sharding** or **replica sets**.
 
 - **Replica sets:** Multiple servers hold copies of the same data. For example, your Aadhaar data is on server 1 and server 3 of 10. If server 1 goes down, it is read from server 3.
+
+```mermaid
+flowchart LR
+  Q["Read Aadhaar data"] -.-x S1["Server 1 (copy)<br/>down"]
+  Q --> S3["Server 3 (copy)<br/>serves the read"]
+```
 
 ### C. High availability
 
@@ -167,6 +206,13 @@ The simplest type of NoSQL database is a key-value store. Every data element is 
 - **One key, one value:** There are no multiple fields or objects (no name and so on). A single value is found for a key, like a binary lookup.
 - **Use cases:** Shopping carts, user preferences and user profiles.
   - **Shopping cart:** One hash key per cart item. The first key is the item id with value mobile, the second has value cream, and the third has value monitor.
+
+  ```mermaid
+  flowchart LR
+    K1["key: item 1"] --> V1["mobile"]
+    K2["key: item 2"] --> V2["cream"]
+    K3["key: item 3"] --> V3["monitor"]
+  ```
 - **Examples:** Oracle NoSQL, Amazon DynamoDB, Redis. MongoDB also supports key-value.
 - **Definition:** A key-value database associates a value with a key. The value can be anything from a number or simple string to a complex object. The key keeps track of the object.
   - **Like a map:** In its simplest form, it is like a dictionary, array or map object in most programming paradigms. But it is stored persistently and managed by a Database Management System (DBMS).
@@ -188,6 +234,18 @@ The data is stored so that each row of a column sits next to other rows from tha
   - Insert needs changes in the middle, so write, update and delete are slow. It is like appending to a linked list versus editing in the middle.
 - **Column store:** All names sit together, all cities together, all ages together. Adding a new tuple (Rahul) means adding to each column's place.
   - Reads are fast, but insert is slow in column stores too.
+
+```mermaid
+flowchart TB
+  subgraph Row["Row store (SQL): a row sits together"]
+    direction LR
+    r1["Matt | Delhi | 27"] --- r2["Rahul | ... | ..."]
+  end
+  subgraph Col["Column store: a column sits together"]
+    direction LR
+    c1["names: Matt, Rahul, ..."] --- c2["cities: Delhi, ..."] --- c3["ages: 27, ...<br/>(AVG reads only this)"]
+  end
+```
 - **Analytics:** A relational database reads data row by row. A column store is organised as a set of columns. So for analytics on a few columns, you read those columns directly without loading unwanted data.
 - **Compression:** Columns are often of the same type and compress more efficiently. That makes reads even faster.
 - **Aggregation:** Columnar databases quickly aggregate the value of a given column, such as the total sales for the year.
@@ -202,6 +260,13 @@ This DB stores data in documents similar to JSON (JavaScript Object Notation) ob
 
 - **Versus key-value:** Key-value had one field and one value. A document has multiple fields. A document in the DB is like a JSON object. JSON is widely used on the web to transmit data.
 - **Relating documents:** One document can relate to another. For example, a user document (with id) and a contact or access document also have the user id (such as 1). That is like a foreign key, so relations can be applied.
+
+```mermaid
+flowchart LR
+  U["user document<br/>{ id: 1, name, ... }"]
+  C["contact document<br/>{ user_id: 1, phone, ... }"]
+  C -- "user_id works like a foreign key" --> U
+```
 - **Use cases:** E-commerce platforms, trading platforms and mobile app development across industries.
 - **ACID:** It supports ACID properties, so it suits transactions.
 - **Examples:** MongoDB, CouchDB.
@@ -214,8 +279,30 @@ A graph database focuses on the relationship between data elements. Each element
 - **First-class links:** In a graph database, connections are stored directly. In relational databases, links are implied, using data to express the relationships.
 - **Visualised as a graph:** Nodes (vertices) and edges. The edges are the relations.
 - **Example:** Facebook friends, and friends of friends. Profiles A, B, C, D, E are stored. Relations are stored as edges: A related to B, B friend of C, and so on. It is mostly used in social media (who follows whom).
+
+```mermaid
+flowchart LR
+  A((A)) --- B((B)) --- C((C))
+  A --- D((D))
+  D --- E((E))
+  B --- E
+```
 - **No join:** The directly related relations are stored, so no join is needed to establish the relation.
 - **Versus SQL:** SQL keeps user profile tables plus a separate table with two foreign keys noting who is friend of whom. Then it joins to get the relation. Graph DBs avoid this overhead.
+
+```mermaid
+erDiagram
+  USER_PROFILE ||--o{ FRIENDSHIP : "user_id"
+  USER_PROFILE ||--o{ FRIENDSHIP : "friend_id"
+  USER_PROFILE {
+    int id PK
+    string name
+  }
+  FRIENDSHIP {
+    int user_id FK
+    int friend_id FK
+  }
+```
 - **Optimised:** A graph database is optimised to capture and search the connections between data elements. It overcomes the overhead of JOINing multiple tables in SQL.
 - **Limit:** Very few real-world business systems can survive solely on graph queries. So graph databases usually run alongside other more traditional databases.
 - **Use cases:** Fraud detection, social networks and knowledge graphs.
@@ -285,3 +372,15 @@ Notes on each row:
    - **SQL:** A server or client retrieves a student's name, age, course id and address from a SQL DB. The front-end application has a Student class. So the retrieved fields must be mapped one by one into an instance (student.name = value from server). This is data-to-object mapping (ORM), and it is required.
    - **Java:** This is done with the DAO (Data Access Object) design pattern. Read about the DAO pattern as homework.
    - **MongoDB:** A document maps directly to the data structure (such as a Python class) in the language. So student = whatever came from the server fills the fields automatically. No explicit mapping is needed.
+
+   ```mermaid
+   flowchart LR
+     subgraph SQL["SQL"]
+       direction LR
+       R["Row: name, age,<br/>course id, address"] -- "map field by field<br/>(ORM / DAO)" --> O1["Student object"]
+     end
+     subgraph Mongo["MongoDB"]
+       direction LR
+       D["Document"] -- "maps directly" --> O2["Student object"]
+     end
+   ```
