@@ -1,14 +1,24 @@
 # Lecture 9: Strategy Pattern
 
-1. **Behavioral patterns** take care of effective communication and the assignment of responsibilities between objects. Strategy is the behavioral pattern in this course.
+1. **Behavioral patterns** handle communication and the split of responsibilities between objects.
+   - **In this course:** Strategy is the behavioral pattern.
+
 2. **Definition**
-   1. The Strategy pattern defines a family of interchangeable algorithms and allows them to be used interchangeably within a context.
-   2. It lets the algorithm be selected at **runtime**, which gives flexibility and promotes code reuse.
-   3. Three roles:
-      1. **Strategy interface**: the common shape of every algorithm, for example `Sort(vector<int>&)`.
-      2. **Concrete strategies**: one class per algorithm, such as `BubbleSort`, `QuickSort` and `MergeSort`.
-      3. **Context**: the class that uses an algorithm, here `Sorter`. It holds a pointer to the strategy interface and never knows which concrete algorithm is behind it.
-   4. The problem it solves: without the pattern, `Sorter::Sort` would be one big `if (type == "bubble") ... else if (type == "quick") ...`. Every new algorithm would mean editing `Sorter`, which breaks the open-closed principle (lecture 6).
+
+   1. The Strategy pattern defines a family of interchangeable algorithms. A context can use any of them.
+   2. It lets you pick the algorithm at **runtime**. This gives flexibility and promotes code reuse.
+   3. It has three roles:
+
+      | Role | Meaning | Example |
+      |------|---------|---------|
+      | **Strategy interface** | The common shape of every algorithm. | `Sort(vector<int>&)` |
+      | **Concrete strategies** | One class per algorithm. | `BubbleSort`, `QuickSort`, `MergeSort` |
+      | **Context** | The class that uses an algorithm. It holds a pointer to the strategy interface. It never knows which concrete algorithm is behind it. | `Sorter` |
+
+   4. **The problem it solves:** Without the pattern, `Sorter::Sort` is one big `if (type == "bubble") ... else if (type == "quick") ...`.
+      - **Cost:** Every new algorithm means editing `Sorter`.
+      - **Rule broken:** This breaks the open-closed principle (lecture 6).
+
 3. **Example: a sorter**
 
    ```mermaid
@@ -111,19 +121,25 @@
    }
    ```
 
-   1. `Sorter` has a strategy (aggregation: it holds a pointer, and the strategy object lives outside it). It also delegates the real work to that strategy.
-   2. Adding `HeapSort` means one new class. `Sorter` is never touched.
-   3. Compare with the open-closed `TextEditor` (lecture 6): it is the same idea. There the strategy was passed into each call. Here it is stored in the context and can be changed with `SetStrategy`.
-   4. Other everyday examples: payment methods (card, UPI, wallet) at checkout, route planning (fastest, shortest, avoid tolls), and the elevator scheduling algorithms in lecture 14.
+   1. **Aggregation:** `Sorter` has a strategy. It holds a pointer, and the strategy object lives outside it.
+   2. **Delegation:** `Sorter` hands the real work to the strategy.
+   3. **Extending:** Adding `HeapSort` means one new class. `Sorter` is never touched.
+   4. **Compare with `TextEditor` (lecture 6):** It is the same open-closed idea.
+      - **There:** The strategy was passed into each call.
+      - **Here:** The strategy is stored in the context. You change it with `SetStrategy`.
+   5. **Other everyday examples:**
+      - Payment methods (card, UPI, wallet) at checkout.
+      - Route planning (fastest, shortest, avoid tolls).
+      - The elevator scheduling algorithms in lecture 14.
+
 4. **Pros and cons**
-   1. Pros:
-      1. Strategies can be swapped at runtime without changing the context that uses them. This allows behaviour to change dynamically.
-      2. Each algorithm is encapsulated in its own class, which makes the code more maintainable and easier to understand.
-      3. Each strategy class handles a single algorithm. This gives cleaner, more modular code where each class has a single responsibility.
-      4. Since strategies are encapsulated, they can be reused in different parts of the codebase without duplicating code.
-      5. Each strategy can be tested independently, which makes unit testing easier.
-   2. Cons:
-      1. It involves creating many strategy classes, which increases the number of classes and objects in the codebase.
-      2. Clients must be aware of the different strategies and pick the most appropriate one. This adds complexity to client code.
-      3. Managing and configuring strategies can become complex if there are many of them or they have complex dependencies.
-5. Next: Strategy swaps *one* behaviour for another. Sometimes we want to *stack* extra behaviour on top of an object instead (milk, then sugar, on a coffee). That is the Decorator pattern.
+
+   | Pros | Cons |
+   |------|------|
+   | Strategies swap at runtime without changing the context. Behaviour can change dynamically. | Many strategy classes increase the number of classes and objects in the codebase. |
+   | Each algorithm is encapsulated in its own class. The code is easier to maintain and understand. | Clients must know the different strategies and pick the right one. This adds complexity to client code. |
+   | Each strategy class handles one algorithm. The code is cleaner and more modular. Each class has a single responsibility. | Managing and configuring strategies gets complex if there are many of them or they have complex dependencies. |
+   | Strategies are encapsulated, so they can be reused in other parts of the codebase without duplicating code. | |
+   | Each strategy can be tested independently. Unit testing is easier. | |
+
+5. **Next:** Strategy swaps one behaviour for another. Sometimes you want to stack extra behaviour on an object instead, like milk, then sugar, on a coffee. That is the Decorator pattern.
