@@ -1,49 +1,62 @@
 # Lecture 13: Design a Parking Lot
 
 1. **Points to discuss (clarification questions)**
-   1. Multiple floors?
-   2. Multiple entry and exit points?
-   3. Which vehicle types must be supported?
-   4. Parking fees: how are they charged (per hour, flat rate, different rates per spot type)?
-   5. Customer payment methods: cash, card, others?
-   6. Parking lot capacity: what happens when it is full?
-   7. In this design we agree on the following: hourly fees that depend on the spot type, payment by cash or card, and a "full" message when no matching spot is left.
+   1. **Floors:** Ask whether there are multiple floors.
+   2. **Entry and exit points:** Ask whether there are multiple entry and exit points.
+   3. **Vehicle types:** Ask which vehicle types must be supported.
+   4. **Parking fees:** Ask how fees are charged (per hour, flat rate, different rates per spot type).
+   5. **Payment methods:** Ask which methods customers use (cash, card, others).
+   6. **Capacity:** Ask what happens when the lot is full.
+   7. **Agreement:** In this design we agree on hourly fees that depend on the spot type. We agree on payment by cash or card. We agree on a "full" message when no matching spot is left.
+
 2. **Requirements**
-   1. The parking lot has multiple floors where customers can park their vehicles.
-   2. The parking lot has multiple entry and exit points.
-   3. Customers collect a parking ticket at an entry point and use it to exit at an exit point.
-   4. The system must not allow more vehicles than the maximum capacity. If parking is full, it shows a message at the entrance panel and on the parking display board on the ground floor.
-   5. Each floor has many parking spots. The system supports multiple types of spot: Compact, Large, Handicapped, Motorcycle.
-   6. The system supports parking for different types of vehicles: car, truck, van, motorcycle.
-   7. Fees are charged per hour by spot type, and the customer pays at the exit by cash or card.
+   1. **Floors:** The parking lot has multiple floors where customers can park their vehicles.
+   2. **Entry and exit points:** The parking lot has multiple entry and exit points.
+   3. **Ticket:** Customers collect a parking ticket at an entry point and use it to exit at an exit point.
+   4. **Capacity:** The system must not allow more vehicles than the maximum capacity. If parking is full, it shows a message at the entrance panel and on the parking display board on the ground floor.
+   5. **Spots:** Each floor has many parking spots. The system supports multiple types of spot: Compact, Large, Handicapped, Motorcycle.
+   6. **Vehicles:** The system supports parking for different types of vehicles: car, truck, van, motorcycle.
+   7. **Fees:** Fees are charged per hour by spot type. The customer pays at the exit by cash or card.
+
 3. **Supporting use cases**
-   1. A car arrives at entrance 1. The panel finds a free compact spot, issues a ticket, and the display board's free count drops by one.
-   2. A truck arrives when every large spot is taken. The entrance panel and the ground-floor board both show "full", and no ticket is issued.
-   3. The car leaves through exit 2 after 3 hours. The exit panel reads the ticket, computes the fee, takes payment by card, and frees the spot.
+   1. **Car arrives:** A car arrives at entrance 1. The panel finds a free compact spot and issues a ticket. The display board's free count drops by one.
+   2. **Lot full:** A truck arrives when every large spot is taken. The entrance panel and the ground-floor board both show "full". No ticket is issued.
+   3. **Car leaves:** The car leaves through exit 2 after 3 hours. The exit panel reads the ticket and computes the fee. It takes payment by card and frees the spot.
+
 4. **Entities**
-   1. `Vehicle` (abstract): with `Car`, `Truck`, `Van` and `Motorcycle` below it. Each vehicle knows which spot type it needs.
-   2. `SpotType`: an enum with `COMPACT`, `LARGE`, `HANDICAPPED` and `MOTORCYCLE`.
-   3. `ParkingSpot`: one spot, with an id, a type and the vehicle currently parked (or none).
-   4. `ParkingFloor`: a floor number and its spots.
-   5. `Ticket`: ticket id, vehicle, spot and entry time.
-   6. `EntrancePanel` and `ExitPanel`: the entry and exit points. There are several of each.
-   7. `DisplayBoard`: on the ground floor. It shows free spots per type, or "FULL".
-   8. `PaymentStrategy` (interface): with `CashPayment` and `CardPayment` below it.
-   9. `ParkingLot`: owns the floors and the board, and keeps the active tickets.
+
+   | Entity | Role |
+   |--------|------|
+   | `Vehicle` (abstract) | Has `Car`, `Truck`, `Van` and `Motorcycle` below it. Each vehicle knows which spot type it needs. |
+   | `SpotType` | An enum with `COMPACT`, `LARGE`, `HANDICAPPED` and `MOTORCYCLE`. |
+   | `ParkingSpot` | One spot, with an id, a type and the vehicle currently parked (or none). |
+   | `ParkingFloor` | A floor number and its spots. |
+   | `Ticket` | Ticket id, vehicle, spot and entry time. |
+   | `EntrancePanel`, `ExitPanel` | The entry and exit points. There are several of each. |
+   | `DisplayBoard` | Sits on the ground floor. It shows free spots per type, or "FULL". |
+   | `PaymentStrategy` (interface) | Has `CashPayment` and `CardPayment` below it. |
+   | `ParkingLot` | Owns the floors and the board, and keeps the active tickets. |
+
 5. **Relations**
-   1. `Car`, `Truck`, `Van`, `Motorcycle` IS-A `Vehicle`: **inheritance**. The lot asks any vehicle `GetSpotType()` through a base pointer (polymorphism, lecture 3).
-   2. `ParkingLot` → `ParkingFloor` → `ParkingSpot`: **composition**. Floors and spots are built with the lot and don't exist without it.
-   3. `ParkingLot` → `DisplayBoard`: **composition**.
-   4. `ParkingSpot` → `Vehicle`: **association**. A car comes and goes, and its life has nothing to do with the spot.
-   5. `Ticket` → `Vehicle`, `ParkingSpot`: **association**.
-   6. `EntrancePanel` / `ExitPanel` → `ParkingLot`: **association**. Many panels use one lot.
-   7. `ExitPanel` → `PaymentStrategy`: the payment method is picked at runtime, which is the **Strategy pattern** (lecture 9). Adding UPI later is a new class, and `ExitPanel` doesn't change.
-   8. There is only one parking lot, so `ParkingLot` could be a singleton (lecture 8). Here it is created once in `main` and passed to the panels, which keeps it easy to test.
+
+   | Relation | Type | Why |
+   |----------|------|-----|
+   | `Car`, `Truck`, `Van`, `Motorcycle` IS-A `Vehicle` | **Inheritance** | The lot asks any vehicle `GetSpotType()` through a base pointer (polymorphism, lecture 3). |
+   | `ParkingLot` to `ParkingFloor` to `ParkingSpot` | **Composition** | Floors and spots are built with the lot and do not exist without it. |
+   | `ParkingLot` to `DisplayBoard` | **Composition** | The board belongs to the lot. |
+   | `ParkingSpot` to `Vehicle` | **Association** | A car comes and goes. Its life has nothing to do with the spot. |
+   | `Ticket` to `Vehicle`, `ParkingSpot` | **Association** | The ticket refers to both. |
+   | `EntrancePanel`, `ExitPanel` to `ParkingLot` | **Association** | Many panels use one lot. |
+   | `ExitPanel` to `PaymentStrategy` | **Strategy pattern** (lecture 9) | The payment method is picked at runtime. Adding UPI later is a new class, and `ExitPanel` does not change. |
+
+   - **Singleton:** There is only one parking lot, so `ParkingLot` could be a singleton (lecture 8). Here it is created once in `main` and passed to the panels. This keeps it easy to test.
+
 6. **Algorithms**
-   1. **Find a spot**: go floor by floor from the ground up, and return the first free spot whose type matches the vehicle. If none is found, the lot is full for that vehicle type.
-   2. **Capacity**: never count vehicles separately. "Full" simply means "find a spot" found nothing, so the count can never drift from reality.
-   3. **Fee**: hours parked (at least 1) × the hourly rate for the spot type.
-   4. **Display board**: after every entry and exit, recount the free spots per type and show them.
+   1. **Find a spot:** Go floor by floor from the ground up. Return the first free spot whose type matches the vehicle. If none is found, the lot is full for that vehicle type.
+   2. **Capacity:** Never count vehicles separately. "Full" simply means "find a spot" found nothing. So the count can never drift from reality.
+   3. **Fee:** Hours parked (at least 1) × the hourly rate for the spot type.
+   4. **Display board:** After every entry and exit, recount the free spots per type and show them.
+
 7. **UML class diagram**
 
    ```mermaid
@@ -356,6 +369,6 @@
    }
    ```
 
-   1. `car_ticket` is read before `Exit` because `Unpark` erases the ticket from the map. The pointer is invalid after that.
-   2. A new vehicle type (an electric car needing a charging spot) means one new `SpotType` value and one new `Vehicle` subclass. The floors, panels and lot don't change.
-9. Next: the last case study is the most algorithm-heavy: an elevator system, where the hard part is deciding which elevator goes where.
+   1. **Read order:** `car_ticket` is read before `Exit` because `Unpark` erases the ticket from the map. The pointer is invalid after that.
+   2. **New vehicle type:** An electric car needing a charging spot means one new `SpotType` value and one new `Vehicle` subclass. The floors, panels and lot do not change.
+9. **Next:** The last case study is the most algorithm-heavy: an elevator system, where the hard part is deciding which elevator goes where.
