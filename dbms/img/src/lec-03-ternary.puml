@@ -1,0 +1,13 @@
+@startchen
+entity EMPLOYEE {
+}
+entity BRANCH {
+}
+entity JOB {
+}
+relationship "WORKS-ON" as WORKS {
+}
+WORKS -- EMPLOYEE
+WORKS -- BRANCH
+WORKS -- JOB
+@endchen

@@ -1,0 +1,17 @@
+@startdot
+graph G {
+  bgcolor=white; rankdir=LR; nodesep=0.3;
+  node [fontname="Helvetica", fontsize=12]; edge [fontname="Helvetica", fontsize=11];
+  LOAN [shape=box];
+  PAYMENT [shape=box, peripheries=2];
+  inst [shape=diamond, peripheries=2, label="Instalment\nPayments"];
+  node [shape=ellipse];
+  loan_id [label=<<u>Loan ID</u>>]; loan_type [label="Loan type"];
+  pay_no [label=<<table border="0" cellborder="0" cellpadding="0"><tr><td sides="b" border="1" style="dashed">Payment number</td></tr></table>>];
+  amount [label="Amount"];
+  {loan_id loan_type} -- LOAN;
+  LOAN -- inst [label="1"];
+  inst -- PAYMENT [label="N", color="black:invis:black"];
+  PAYMENT -- {pay_no amount};
+}
+@enddot

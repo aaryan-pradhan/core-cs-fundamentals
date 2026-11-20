@@ -35,6 +35,8 @@
          5. **Dependence:** No loan means no payment schedule. A payment cannot exist without the loan.
       3. **A weak entity depends on a strong entity for its existence.**
 
+         ![Loan (strong) and Payment (weak) joined by the Instalment Payments identifying relationship](img/lec-03-weak-entity.svg)
+
 4. **Entity set**
    1. It is a set of entities of the **same** type that share the **same** properties, or attributes.
       1. A database has a schema for Student with a set of attributes. Any one student is an entity. The whole collection of students is the entity set.
@@ -99,6 +101,8 @@
       3. **Multi-valued:** Phone number, drawn as two concentric ellipses, as there can be multiple phone numbers.
       4. **Derived:** Age, drawn as a dotted ellipse, as it can be derived from date of birth.
 
+      ![Customer entity with key, composite, multi-valued and derived attributes](img/lec-03-customer-attributes.svg)
+
 6. **Relationships**
    1. A relationship is an **association** among two or more entities.
    2. **Examples:** Person has vehicle, Parent has Child, Customer borrow loan.
@@ -111,8 +115,12 @@
    3. **Strong relationship:** It is between two independent entities.
       1. **Example:** Customer places Order. Both have independent existence and their own primary keys (Customer ID, Order ID).
       2. **Example:** Professor takes Course (Professor ID, Course ID).
+
+      ![Customer places Order, a strong relationship](img/lec-03-strong-relationship.svg)
    4. **Weak relationship:** It is between a weak entity and its owner or strong entity.
       1. **Example:** Loan has instalment-payments Payment. It is drawn as a double diamond. Payment exists only if the loan exists.
+
+      ![Loan and Payment joined by a weak relationship (double diamond)](img/lec-03-weak-entity.svg)
    5. **Degree of Relationship**
       1. The degree is the number of entities participating in a relationship.
 
@@ -121,6 +129,18 @@
          | **Unary** | One | Employee manages employee. Within the same set of employees, some employee is a manager who manages others. |
          | **Binary** | Two | Student takes Course. Others: Customer borrow Loan, Customer deposits Account, Professor takes Course. |
          | **Ternary** | Three | Employee works-on branch, employee works-on job. An employee works on a Branch of a bank in a Job role. Job and Branch are also related to each other, and Employee to each of them. |
+
+         **Unary:**
+
+         ![Employee manages Employee](img/lec-03-unary.svg)
+
+         **Binary:**
+
+         ![Student takes Course](img/lec-03-binary.svg)
+
+         **Ternary:**
+
+         ![Employee, Branch and Job joined by works-on](img/lec-03-ternary.svg)
 
       2. Binary relationships are **common**. Ternary and unary are rare. Focus on identifying binary relationships and their constraints.
 
@@ -136,9 +156,70 @@
          | **Many to many** | An entity in A associates with N entities in B, and an entity in B with N in A. | Customer buys Product; Student attends Course |
 
       2. **One to one:** Draw citizens a1, a2, a3... and Aadhar cards b1, b2, b3... The mapping is a1-b1, a2-b2, a3-b3. Each citizen has exactly one card.
+
+         ```mermaid
+         flowchart LR
+           subgraph A[Citizen]
+             direction TB
+             a1 ~~~ a2 ~~~ a3
+           end
+           subgraph B[Aadhar Card]
+             direction TB
+             b1 ~~~ b2 ~~~ b3
+           end
+           a1 --- b1
+           a2 --- b2
+           a3 --- b3
+         ```
       3. **One to many:** One citizen can own multiple vehicles. One vehicle is owned by one citizen. Left to right it is 1:N. Right to left it is N:1.
+
+         ```mermaid
+         flowchart LR
+           subgraph A[Citizen]
+             direction TB
+             a1 ~~~ a2
+           end
+           subgraph B[Vehicle]
+             direction TB
+             b1 ~~~ b2 ~~~ b3
+           end
+           a1 --- b1
+           a1 --- b2
+           a2 --- b3
+         ```
       4. **Many to one:** Courses c1, c2, c3... and professors p1, p2... Courses c1 and c2 are both taught by p1. Left to right, a course has one professor. Right to left, one professor teaches multiple courses.
+
+         ```mermaid
+         flowchart LR
+           subgraph A[Course]
+             direction TB
+             c1 ~~~ c2 ~~~ c3
+           end
+           subgraph B[Professor]
+             direction TB
+             p1 ~~~ p2
+           end
+           c1 --- p1
+           c2 --- p1
+           c3 --- p2
+         ```
       5. **Many to many:** A customer can buy multiple products, and a product can be bought by multiple customers. A student can attend multiple courses, and a course can be attended by multiple students.
+
+         ```mermaid
+         flowchart LR
+           subgraph A[Customer]
+             direction TB
+             a1 ~~~ a2
+           end
+           subgraph B[Product]
+             direction TB
+             b1 ~~~ b2 ~~~ b3
+           end
+           a1 --- b1
+           a1 --- b2
+           a2 --- b2
+           a2 --- b3
+         ```
    2. **Participation Constraints**
       1. They are also called the **minimum cardinality constraint**.
       2. **Types:** Partial and total participation.
@@ -148,6 +229,8 @@
          1. Every loan is borrowed by at least one customer. There is no orphan loan.
          2. Some customers may never have taken a loan, so customer participates partially.
          3. Customer to Loan is partial. Loan to Customer is total.
+
+         ![Customer borrow Loan, with a double line on the Loan side for total participation](img/lec-03-participation.svg)
       6. **A weak entity has a total participation constraint, but a strong entity may not have total.**
          1. A weak entity always has total participation (double line). A strong entity may have partial or total.
          2. **Loan-Payment:** Payment has total participation. A payment schedule exists only if tied to some loan.
@@ -156,6 +239,8 @@
 8. **ER Notations**
 
    Symbols used in an ER diagram:
+
+   ![Symbols used in an ER diagram](img/lec-03-er-symbols.png)
 
    | Symbol | Notation |
    |---|---|

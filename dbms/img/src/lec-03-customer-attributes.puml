@@ -1,0 +1,22 @@
+@startchen
+entity CUSTOMER {
+  "Customer ID" as CustomerID <<key>>
+  Name {
+    "First name" as FirstName
+    "Middle name" as MiddleName
+    "Last name" as LastName
+  }
+  Address {
+    Street {
+      "Street name" as StreetName
+      "Street number" as StreetNumber
+    }
+    City
+    State
+    "Zip code" as Zip
+  }
+  "Phone number" as Phone <<multi>>
+  "Date of birth" as DOB
+  Age <<derived>>
+}
+@endchen

@@ -1,0 +1,13 @@
+@startchen
+left to right direction
+entity CUSTOMER {
+  "Customer ID" as CustomerID <<key>>
+}
+entity ORDER {
+  "Order ID" as OrderID <<key>>
+}
+relationship PLACES {
+}
+PLACES -1- CUSTOMER
+PLACES -N- ORDER
+@endchen

@@ -1,0 +1,11 @@
+@startchen
+left to right direction
+entity STUDENT {
+}
+entity COURSE {
+}
+relationship TAKES {
+}
+TAKES -M- STUDENT
+TAKES -N- COURSE
+@endchen

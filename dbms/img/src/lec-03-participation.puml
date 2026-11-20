@@ -1,0 +1,10 @@
+@startdot
+graph G {
+  bgcolor=white; rankdir=LR;
+  node [fontname="Helvetica", fontsize=12]; edge [fontname="Helvetica", fontsize=11];
+  CUSTOMER [shape=box]; LOAN [shape=box];
+  BORROW [shape=diamond];
+  CUSTOMER -- BORROW [label="M  (partial)"];
+  BORROW -- LOAN [label="N  (total)", color="black:invis:black"];
+}
+@enddot
