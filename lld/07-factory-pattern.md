@@ -7,7 +7,7 @@
    1. **Creational patterns** provide object creation mechanisms that increase flexibility and reuse of existing code. They answer "who creates the object, and how?"
       1. Factory pattern (this lecture)
       2. Singleton pattern (lecture 8)
-   2. **Behavioral patterns** deal with how objects behave and divide work between them. They answer "who does what, and how can that be swapped?"
+   2. **Behavioral patterns** take care of effective communication and the assignment of responsibilities between objects. They answer "who does what, and how can that be swapped?"
       1. Strategy pattern (lecture 9)
    3. **Structural patterns** help connect different pieces together to form a larger structure. They answer "how are objects composed?"
       1. Decorator pattern (lecture 10)
