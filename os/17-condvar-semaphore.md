@@ -1,31 +1,38 @@
 # Lecture 17: Conditional Variable and Semaphores for Threads synchronization
 
-- Recap of the earlier solutions to the critical section problem:
-  - Single flag solution: not good, because it does not give progress.
-  - Peterson's solution: works only for two threads.
-  - Locks (mutex): a good solution; the count example (two threads incrementing a shared count) gives the correct result.
-- Biggest problem with locks: busy waiting.
+Earlier solutions to the critical section problem:
+
+| Solution | Verdict |
+|----------|---------|
+| Single flag | Not good. It does not give progress. |
+| Peterson's solution | Works only for two threads. |
+| Locks (mutex) | Good. The count example (two threads incrementing a shared count) gives the correct result. |
+
+- **Biggest problem with locks:** busy waiting.
   - T1 enters the C.S. and acquires the lock. T2 tries to enter and waits on that lock.
   - Internally that wait is a `while` loop spinning on some flag.
-  - While spinning, T2 keeps using CPU cycles that are very important, and they are wasted.
-- Improved methods below: condition variables and semaphores.
+  - While spinning, T2 wastes very important CPU cycles.
+- **Improved methods:** condition variables and semaphores.
 
 ## 1. Conditional variable
 
-a. The condition variable is a synchronization primitive that lets the thread wait until a certain condition occurs.
-   - Every programming language provides it (e.g. `threading.Condition` in Python, `std::condition_variable` in C++).
-   - Two operations on it: wait and signal (notify).
-   - The thread waits for a signal without using CPU cycles. The signal comes as a (software) interrupt from the kernel; until then the CPU can execute some other thread or job.
+a. A condition variable is a synchronization primitive. It lets a thread wait until a certain condition occurs.
+   - **Availability:** Every programming language provides it (e.g. `threading.Condition` in Python, `std::condition_variable` in C++).
+   - **Operations:** wait and signal (notify).
+   - **Waiting:** The thread waits for a signal without using CPU cycles. The signal comes as a (software) interrupt from the kernel. Until then the CPU can run some other thread or job.
 
-b. Works with a lock
-   - Internally a condition variable uses a mutex (lock).
-   - In C++ you pass the mutex yourself as an argument; in Python the lock is created internally, so you do not pass one explicitly.
+b. It works with a lock.
+   - **Internal mutex:** It uses a mutex (lock) internally.
+   - **C++:** You pass the mutex yourself as an argument.
+   - **Python:** The lock is created internally, so you do not pass one.
 
-c. Thread can enter a wait state only when it has acquired a lock. When a thread enters the wait state, it will release the lock and wait until another thread notifies that the event has occurred. Once the waiting thread enters the running state, it again acquires the lock immediately and starts executing.
-   - The condition becomes true only when some other thread notifies on the condition variable.
-   - Flow for the waiting thread: acquire lock → check condition → condition false → wait: the thread is fully blocked and the CPU is freed (no busy waiting).
-   - Notify: sets the condition true and sends a software interrupt (done by the kernel) to the blocked thread: "wake up, check the condition again, and do what is needed".
-   - After waking: the thread acquires the internal lock again, checks the condition again, finds it true, and continues with the next line.
+c. A thread can enter the wait state only when it has acquired a lock.
+   - **On wait:** The thread releases the lock and waits until another thread notifies that the event has occurred.
+   - **On wake:** Once the waiting thread is running again, it acquires the lock immediately and starts executing.
+   - **Condition:** It becomes true only when some other thread notifies on the condition variable.
+   - **Waiting thread flow:** Acquire lock, check condition, find it false, then wait. The thread is fully blocked and the CPU is freed. There is no busy waiting.
+   - **Notify:** It sets the condition true. The kernel sends a software interrupt to the blocked thread: "wake up, check the condition again, and do what is needed".
+   - **After waking:** The thread re-acquires the internal lock, rechecks the condition, finds it true, and continues.
 
    Example (two threads, T2 must run before T1):
 
@@ -65,40 +72,40 @@ c. Thread can enter a wait state only when it has acquired a lock. When a thread
    t2.join()
    ```
 
-   - At the start `done = 1`. Ideally T1 would run completely first (it is started first).
-   - T1 sees `done == 1`, sets `done = 2`, and waits on `cv`: it acquires the lock, finds the condition false (T2 has not notified yet), and is blocked.
-   - T2 sees `done == 2`, so the else part runs: sleeps 5 seconds, prints "signaling", calls `notify_all()`.
-   - T1 wakes, re-acquires the lock, rechecks the condition (now true) and prints "condition met".
-   - Output: T1 prints it is waiting; after 5 seconds T2 signals; then T1 continues. So T2 executed first even though T1 was started first: the threads are synchronised without busy waiting.
-   - Use: whenever one thread must wait in the code until another thread finishes its work and notifies it, before it enters.
+   - **Start:** `done = 1`. T1 is started first.
+   - **T1:** It sees `done == 1`, sets `done = 2`, finds the condition false (T2 has not notified yet), and blocks on `cv`.
+   - **T2:** It sees `done == 2`, so the else part runs. It sleeps 5 seconds, prints "signaling", and calls `notify_all()`.
+   - **T1 again:** It wakes, re-acquires the lock, rechecks the condition (now true) and prints "condition met".
+   - **Output:** T1 prints that it is waiting. After 5 seconds T2 signals. Then T1 continues. T2 ran first even though T1 started first, without busy waiting.
+   - **Use:** One thread must wait in the code until another thread finishes its work and notifies it.
 
-d. Why to use conditional variable?
+d. Why use a conditional variable?
    i. To avoid busy waiting.
-   - No busy waiting, so no CPU cycles are wasted. Used extensively in industry.
+   - No CPU cycles are wasted. It is used extensively in industry.
 
 e. **Contention** is not here.
 
 ## 2. Semaphores
 
-a. Synchronization method.
+a. A semaphore is a synchronization method.
 
-b. An integer that is equal to number of resources
-   - Used when one resource has multiple instances (copies).
-   - Example: a big printer server (one resource) with 3 printers inside it = 3 instances of the printer.
-   - With 3 instances, 3 threads can be sent in parallel. Out of 10 threads, only 3 are let in at a time.
-   - A mutex fits one instance: lock/unlock passes many threads through one C.S. sequentially, one at a time.
+b. It is an integer equal to the number of resources.
+   - **Use:** One resource has multiple instances (copies).
+   - **Example:** A big printer server (one resource) with 3 printers inside it is 3 instances of the printer.
+   - **Parallelism:** With 3 instances, 3 threads can be sent in parallel. Out of 10 threads, only 3 are let in at a time.
+   - **Mutex:** It fits one instance. Lock and unlock pass many threads through one C.S. sequentially, one at a time.
 
-c. Multiple threads can go and execute C.S concurrently.
+c. Multiple threads can execute the C.S. concurrently.
 
    Working (resource with 3 instances, threads T1..T10, semaphore S = 3):
-   1. T1 comes; S = 3, so it is allowed; S decremented to 2.
-   2. T2 comes; allowed; S = 1.
-   3. T3 comes; allowed; S = 0.
+   1. T1 comes. S = 3, so it is allowed. S becomes 2.
+   2. T2 comes and is allowed. S becomes 1.
+   3. T3 comes and is allowed. S becomes 0.
    4. S = 0, so other threads wait until T1, T2 or T3 frees its instance.
-   5. T1 exits; S incremented to 1 (S++).
+   5. T1 exits. S is incremented to 1 (S++).
    6. Waiting T4 sees S = 1 and gets the resource.
 
-d. Allows multiple program threads to access the finite instance of resources whereas mutex allows multiple threads to access a single shared resource one at a time.
+d. A semaphore lets multiple threads access a finite number of instances of a resource. A mutex lets threads access a single shared resource one at a time.
 
    Python code from the lecture:
 
@@ -121,31 +128,34 @@ d. Allows multiple program threads to access the finite instance of resources wh
        t.join()
    ```
 
-   - 5 threads, semaphore value 3: T1, T2, T3 work together; only when they finish do T4 and T5 get a chance.
-   - With a lock: T1's loop runs 5 times, then T2's 5 times, then T3's, and so on.
-   - Semaphore value = number of threads that get parallel access to the C.S. at a point of time.
-   - Semaphore value 5: all five threads execute in parallel.
+   - **5 threads, value 3:** T1, T2, T3 work together. Only when they finish do T4 and T5 get a chance.
+   - **With a lock:** T1's loop runs 5 times, then T2's 5 times, then T3's, and so on.
+   - **Semaphore value:** It is the number of threads that get parallel access to the C.S. at a point of time.
+   - **Value 5:** All five threads execute in parallel.
 
-e. Binary semaphore: value can be 0 or 1.
-   i. Aka, mutex locks
-   - Semaphore value 1: only one thread goes at a time; the output is exactly like a lock (each thread's loop runs 5 times, then the next thread's).
-   - Some mutex implementations (e.g. in C++) internally work as a binary semaphore; the abstraction hides it.
+e. Binary semaphore: the value can be 0 or 1.
+   i. Also known as a mutex lock.
+   - **Value 1:** Only one thread goes at a time. The output is exactly like a lock (each thread's loop runs 5 times, then the next thread's).
+   - Some mutex implementations (e.g. in C++) work internally as a binary semaphore.
 
 f. Counting semaphore
-   i. Can range over an unrestricted domain.
-   ii. Can be used to control access to a given resource consisting of a finite number of instances.
-   - Semaphore value greater than 1. Called counting because the value keeps counting: −1 on wait, +1 on signal.
+   i. It can range over an unrestricted domain.
+   ii. It can control access to a resource with a finite number of instances.
+   - **Value:** Greater than 1. It is called counting because the value keeps counting: minus 1 on wait, plus 1 on signal.
 
-g. To overcome the need for busy waiting, we can modify the definition of the wait () and signal () semaphore operations. When a process executes the wait () operation and finds that the semaphore value is not positive, it must wait. However, rather than engaging in busy waiting, the process car block itself. The block- operation places a process into a waiting queue associated with the semaphore, and the state of the process is switched to the Waiting state. Then control is transferred to the CPU scheduler, which selects another process to execute.
+g. To avoid busy waiting, the wait() and signal() operations are modified.
+   - **Wait:** A process that executes wait() and finds the semaphore value not positive must wait. Instead of busy waiting, the process blocks itself.
+   - **Block operation:** It places the process into a waiting queue associated with the semaphore. The process state switches to Waiting.
+   - **Then:** Control is transferred to the CPU scheduler, which selects another process to execute.
 
    Internal working (semaphore S = 2, i.e. 2 instances):
-   1. T1 calls `wait()`: S-- → 1. 1 is not less than 0, so T1 gets an instance.
-   2. T2 calls `wait()`: S-- → 0. T2 gets the second instance.
-   3. T3 calls `wait()`: S-- → −1. S is negative, so T3 is blocked (same idea as the condition variable: thread blocked, CPU free).
-   4. T4, T5, ... also get blocked: only 2 instances exist.
-   5. T1 finishes the C.S. and calls `signal()` to say it freed its instance: S++, and a wakeup is sent to blocked T3.
-   6. T3 gets the CPU again and continues from where it was blocked, straight into the C.S. (T3 takes the instance T1 freed).
-   7. When T3 exits it also calls `signal()`, S++ again. So only 2 instances are held at any time.
+   1. T1 calls `wait()`. S-- gives 1. 1 is not less than 0, so T1 gets an instance.
+   2. T2 calls `wait()`. S-- gives 0. T2 gets the second instance.
+   3. T3 calls `wait()`. S-- gives −1. S is negative, so T3 is blocked. This is the same idea as the condition variable: thread blocked, CPU free.
+   4. T4, T5, ... also get blocked, because only 2 instances exist.
+   5. T1 finishes the C.S. and calls `signal()` to say it freed its instance. S++ runs, and a wakeup is sent to blocked T3.
+   6. T3 gets the CPU again and continues from where it was blocked, straight into the C.S. T3 takes the instance T1 freed.
+   7. When T3 exits it also calls `signal()`, and S++ runs again. So only 2 instances are held at any time.
 
    Code for each thread:
 
@@ -155,7 +165,9 @@ g. To overcome the need for busy waiting, we can modify the definition of the wa
    signal(S);
    ```
 
-h. A process that is blocked, waiting on a semaphore S, should be restarted when some other process executes a signal () operation. The process is restarted by a wakeup () operation, which changes the process from the waiting state to the ready state. The process is then placed in the ready queue.
+h. A process blocked on a semaphore S restarts when some other process executes signal().
+   - **Wakeup:** The wakeup() operation restarts the process. It changes the process from the waiting state to the ready state.
+   - **Then:** The process is placed in the ready queue.
 
-- Why semaphores: to let more than one thread into the critical section, but not unlimited threads; a limited number, because a resource has only a limited number of instances.
-- Practise: write these synchronisation methods yourself in C++, C, or Python (simplest).
+- **Why semaphores:** They let a limited number of threads (not unlimited) into the C.S., because a resource has limited instances.
+- **Practise:** Write these synchronisation methods yourself in C++, C, or Python (simplest).
