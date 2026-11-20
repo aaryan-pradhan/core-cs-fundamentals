@@ -33,6 +33,11 @@
       These conclusions are information.
 
    - **Flow:** data, then processing, then information, then decision making. The only difference between data and information is one processing step.
+
+     ```mermaid
+     flowchart LR
+       D["Data<br/>(raw facts, 800 and 2 likes)"] --> P["Processing<br/>(analyze, interpret)"] --> I["Information<br/>(Instagram works best)"] --> X["Decision<br/>(promote on Instagram)"]
+     ```
    - **Census:** Family members, age groups and gender in tables are data. "100 senior citizens in the area" is information.
    - **Social media:** A business posts on Facebook, Instagram and LinkedIn. Like counts are data. Processing shows 800 likes on Instagram and 2 on LinkedIn. That is information. The decision is to promote on Instagram.
    - **Online shopping:** Feedback text stored as bytes is data. Sentiment analysis shows positive or negative feedback and which age group likes the product. Customer age, rating and recommendation level are information. Stakeholders decide which age group to target and where to run ads.
@@ -73,17 +78,12 @@
 
 7. Diagram of a DBMS:
 
-   ```
-                          +-------+
-                    API   |  App  |
-                 +------->+-------+
-   +----------+  |
-   | Database |->| DBMS |--API-->+-------+
-   +----------+  |              | User  |
-                 |              +-------+
-                 +--API-->+-------+
-                          |  App  |
-                          +-------+
+   ```mermaid
+   flowchart LR
+     DB[("Database<br/>(data on disk)")] <--> DBMS["DBMS<br/>(set of programs:<br/>add, access, update, delete)"]
+     DBMS <-- API --> App1["App"]
+     DBMS <-- API --> User["User"]
+     DBMS <-- API --> App2["App"]
    ```
 
 8. **DBMS vs File Systems**
@@ -91,11 +91,36 @@
    - **Why not files?** Earlier, data (names, courses, roll numbers, phone numbers) was kept in separate files or one combined file. Files are not extensible. With billions of records, storing is possible but accessing efficiently is not.
    - **Bank example:** A bank builds a savings-account system on files. A programmer writes programs for debit and credit, new accounts, balance, and monthly statements. After 10 years, the bank wants current accounts. They have no interest, different debit and credit rules, and quarterly or yearly statements. This was not anticipated, so a new programmer writes new files and programs. **Analogy:** same as the OS idea. Without a DBMS, each programmer writes all of this.
 
+     ```mermaid
+     flowchart TB
+       subgraph FS["File system: every need gets its own programs and files"]
+         P1["Savings programs<br/>(debit, credit, statement)"] --> F1[("savings file")]
+         P2["Current account programs<br/>(written 10 years later)"] --> F2[("current file")]
+         P3["Pin code report program"] --> F1
+         P3 --> F2
+       end
+       subgraph DS["DBMS: one system, queries for new needs"]
+         Q["Apps and queries"] --> M["DBMS"] --> D[("one database")]
+       end
+     ```
+
    1. **File-processing systems** have major **disadvantages**.
 
       1. **Data redundancy and inconsistency**
          - **Redundancy:** The same person (address and so on) exists in the savings file and the current-account file. Two programmers stored it differently. Same data in two places wastes disk.
          - **Inconsistency:** A person changes address in the savings file. It is forgotten in the current-account file. Now the person has two addresses.
+
+           ```mermaid
+           flowchart LR
+             subgraph S["savings file"]
+               A1["Person: new address"]
+             end
+             subgraph C["current-account file"]
+               A2["Person: old address"]
+             end
+             A1 -. "same person stored twice<br/>(redundancy)" .- A2
+             A2 -. "update missed, two addresses<br/>(inconsistency)" .- A1
+           ```
          - **Fix:** Programs that update both places. This is complex and needs a program for every small thing.
 
       2. **Difficulty in accessing data**
