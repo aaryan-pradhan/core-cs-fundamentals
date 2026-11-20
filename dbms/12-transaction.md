@@ -18,6 +18,11 @@ Transaction T1 has 6 logical steps, in this sequence:
 5. B = B + 50: B becomes 2050.
 6. Write(B).
 
+```mermaid
+flowchart LR
+  S1["1. Read(A)<br/>A = 1000"] --> S2["2. A = A - 50<br/>A = 950"] --> S3["3. Write(A)"] --> S4["4. Read(B)<br/>B = 2000"] --> S5["5. B = B + 50<br/>B = 2050"] --> S6["6. Write(B)"]
+```
+
 - **Atomic:** The 6 steps are treated as a single task. Either the whole transaction completes, or none of it happens.
 - **Failure causes:** An unreadable B, a server error, a hardware failure or a logical error.
 - **Rollback:** If failure comes after A was debited, the debited money is credited back. Real banks sometimes take hours or days, but the money still returns.
@@ -31,6 +36,13 @@ Transaction T1 has 6 logical steps, in this sequence:
 2. **Write(A):** Conceptually, it writes the buffer value (950) into the DB on disk. This is a simplification.
 3. **In real DB systems:** Write also goes only to a buffer in RAM. The change reaches the physical DB only when COMMIT is called at the end.
 4. **SQL commands:** `BEGIN TRANSACTION`, `COMMIT`, `END TRANSACTION`.
+
+```mermaid
+flowchart LR
+  D[("DB on disk<br/>A = 1000")] -- "Read(A)" --> B["Buffer in RAM<br/>A = 950 after A - 50"]
+  B -- "Write(A): stays in buffer" --> B
+  B -- "COMMIT" --> D2[("DB on disk<br/>A = 950")]
+```
 
 ## 2. ACID Properties
 
@@ -46,6 +58,13 @@ Either all operations of the transaction are reflected properly in the DB, or no
 - **Example:** A = 1000, B = 2000. Read(A), A - 50 = 950, Write(A) are done. Before B is updated, the system crashes. Now A = 950 and B = 2000, so the total is 2950. Rs 50 is lost. This is an inconsistent state.
 - **Recovery:** On failure, the transaction recovers to the old state (A = 1000, B = 2000), because it never reached the committed state.
 - **Old state kept:** The DB maintains the old state separately from the intermediate state.
+
+```mermaid
+flowchart LR
+  O["Old state<br/>A = 1000, B = 2000<br/>total 3000"] --> M["Read(A), A - 50, Write(A)<br/>A = 950, B = 2000"]
+  M -- "crash before B is updated" --> X["A = 950, B = 2000<br/>total 2950: Rs 50 lost"]
+  X -- "recover: never committed" --> O
+```
 
 ### b. Consistency
 
@@ -64,6 +83,20 @@ Even when transactions run concurrently, for every pair Ti and Tj it appears to 
   - Both credit B, so B = 2000 + 50 + 50 = 2100.
   - **Result:** A = 950, B = 2100, total 3050. Rs 50 was created, which is impossible.
 - **Solution:** Make transactions look sequential. T2 does not start until T1 terminates (succeeds or fails).
+
+```mermaid
+sequenceDiagram
+  participant T1 as T1 (phone)
+  participant DB as DB
+  participant T2 as T2 (net banking)
+  T1->>DB: Read(A) = 1000
+  T2->>DB: Read(A) = 1000
+  T1->>DB: Write(A) = 950
+  T2->>DB: Write(A) = 950
+  T1->>DB: B = 2000 + 50
+  T2->>DB: B = 2050 + 50
+  Note over DB: A = 950, B = 2100, total 3050: Rs 50 created
+```
 - **In reality:** Both execute concurrently. The DB uses locks so the result is logically sequential.
 - **Importance:** Without isolation, consistency breaks for the whole DB.
 - **Link to OS:** A decrement must be an atomic operation, so that another thread or transaction does not read the old value.
@@ -76,6 +109,13 @@ After a transaction completes successfully, its changes persist, even through sy
 - **Real DBs:** The work happens on a copy in main memory (A = 950, B = 2050). Writing it to the DB file on disk must succeed. If the system crashes during that write, the DB must recover and re-execute it.
 - **Mechanism:** A crash wipes main memory. So the DB either generates logs of every operation (such as 50 subtracted, write to A, read B) and keeps them on disk, or writes to disk at intermediate points.
 - **Restart:** The system reads the logs, finds what happened and redoes the changes in the actual DB. Checkpoints can also be used (covered later).
+
+```mermaid
+flowchart LR
+  T["Transaction works in RAM<br/>A = 950, B = 2050"] -- "every operation" --> L[("Log on disk")]
+  T -- "write to DB file" --> X["Crash: RAM wiped"]
+  X -- "restart" --> R["Recovery manager reads log"] -- "redo changes" --> D[("DB on disk<br/>A = 950, B = 2050")]
+```
 - **Owner:** The recovery management component of the DB ensures durability.
 
 ## 3. Transaction states
