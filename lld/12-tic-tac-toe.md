@@ -1,56 +1,71 @@
 # Lecture 12: Design Tic-Tac-Toe
 
 1. **Points to discuss (clarification questions)**
-   1. Game description: how the game is played.
-   2. Rules:
-      1. Winner: three of the same mark in a row, column or diagonal.
-      2. Loser: the other player.
-      3. Draw: the board is full and nobody has won.
-      4. Illegal moves: a cell that is out of range or already taken.
-      5. Timeouts? What happens if a player doesn't move.
-      6. First move: who starts.
-   3. Generalizing to an N×N board.
-   4. Leaderboard.
-   5. Player ratings.
-   6. Settle these in the first 3–5 minutes. In this design we agree on 3×3, a toss for the first move, and no timeouts, leaderboard or ratings.
+   1. **Game description:** Ask how the game is played.
+   2. **Rules:**
+      1. **Winner:** A player wins with three of the same mark in a row, column or diagonal.
+      2. **Loser:** The other player loses.
+      3. **Draw:** The board is full and nobody has won.
+      4. **Illegal moves:** A cell is out of range or already taken.
+      5. **Timeouts:** Ask what happens if a player does not move.
+      6. **First move:** Ask who starts.
+   3. **N×N board:** Ask about generalizing to an N×N board.
+   4. **Leaderboard:** Ask whether there is one.
+   5. **Player ratings:** Ask whether there are any.
+   6. **Timing:** Settle these in the first 3–5 minutes. In this design we agree on a 3×3 board and a toss for the first move. We agree on no timeouts, no leaderboard and no ratings.
+
 2. **Requirements**
-   1. Game setup: the game initializes a 3×3 board.
-   2. Players: two players take turns.
-   3. Moves: a player places their mark (X or O) on the board.
-   4. Win conditions: the game checks whether a player has won.
-   5. Draw condition: the game checks for a draw when the board is full.
-   6. Game flow: the game alternates between players until there is a win or a draw.
-   7. Validation: moves must be valid, for example the chosen cell must be empty.
-   8. User interface: display the board and prompt players for their moves.
-   9. First move: the game starts with a toss to decide which player goes first.
+   1. **Game setup:** The game initializes a 3×3 board.
+   2. **Players:** Two players take turns.
+   3. **Moves:** A player places their mark (X or O) on the board.
+   4. **Win conditions:** The game checks whether a player has won.
+   5. **Draw condition:** The game checks for a draw when the board is full.
+   6. **Game flow:** The game alternates between players until there is a win or a draw.
+   7. **Validation:** Moves must be valid. For example, the chosen cell must be empty.
+   8. **User interface:** The game displays the board and prompts players for their moves.
+   9. **First move:** The game starts with a toss to decide which player goes first.
+
 3. **Entities**
-   1. `User`: a real person, with id, name and country. A user exists before and after any game.
-   2. `GamePlayer`: a user's role in one game, meaning the user plus their symbol (X or O).
-   3. `Board`: the 3×3 grid. It applies moves, validates them and judges the result.
-   4. `GameStatus`: an enum with `WIN`, `DRAW` and `NOT_ENDED`.
-   5. `GameDisplay`: everything printed on screen.
-   6. `PlayerInput`: where moves come from (keyboard, network, a test script).
-   7. `Game`: ties it all together and runs the turns.
+
+   | Entity | Role |
+   |--------|------|
+   | `User` | A real person, with id, name and country. A user exists before and after any game. |
+   | `GamePlayer` | A user's role in one game. It is the user plus their symbol (X or O). |
+   | `Board` | The 3×3 grid. It applies moves, validates them and judges the result. |
+   | `GameStatus` | An enum with `WIN`, `DRAW` and `NOT_ENDED`. |
+   | `GameDisplay` | Everything printed on screen. |
+   | `PlayerInput` | Where moves come from (keyboard, network, a test script). |
+   | `Game` | Ties it all together and runs the turns. |
+
 4. **Relations**
-   1. `GamePlayer` → `User`: **aggregation**. A game player has a user, but the user outlives the game.
-   2. `Game` → `GamePlayer`: **composition**. Players are created for this game and end with it.
-   3. `Game` → `Board`: **composition**. The board belongs to one game and dies with it.
-   4. `Game` → `GameDisplay`, `PlayerInput`: **association**. The game uses them, but they are created outside and could serve many games.
-   5. `Board` → `GameStatus`: `Judge()` returns one.
-   6. Keeping display and input separate from `Board` is the single responsibility principle in action. The same board logic works with a console, a web page or a test script.
+
+   | Relation | Type | Why |
+   |----------|------|-----|
+   | `GamePlayer` to `User` | **Aggregation** | A game player has a user, but the user outlives the game. |
+   | `Game` to `GamePlayer` | **Composition** | Players are created for this game and end with it. |
+   | `Game` to `Board` | **Composition** | The board belongs to one game and dies with it. |
+   | `Game` to `GameDisplay`, `PlayerInput` | **Association** | The game uses them. They are created outside and could serve many games. |
+   | `Board` to `GameStatus` | Dependency | `Judge()` returns one. |
+
+   - **Single responsibility:** Display and input stay separate from `Board`. The same board logic works with a console, a web page or a test script.
+
 5. **Algorithms**
-   1. **Start**:
-      1. Toss: `rand() % 2` decides who is first.
+   1. **Start:**
+      1. **Toss:** `rand() % 2` decides who is first.
       2. Decide the first and second player.
       3. Display the empty board.
       4. Run turns until the game ends.
-   2. **One turn**:
+   2. **One turn:**
       1. Display whose turn it is.
       2. The player gives a move (r, c).
       3. Validate the move. If it is invalid, show an error and ask again.
       4. `PlayTurn(r, c, symbol)` places the mark.
       5. Check for a win or a draw. If the game is not over, switch players.
-   3. **Judge**: check all 3 rows, 3 columns and 2 diagonals for three equal non-empty marks. If one is found, it is a `WIN` for the player who just moved. If not, and the board is full, it is a `DRAW`. Otherwise the game is `NOT_ENDED`.
+   3. **Judge:** Check all 3 rows, 3 columns and 2 diagonals for three equal non-empty marks.
+      - **Found:** It is a `WIN` for the player who just moved.
+      - **Not found, board full:** It is a `DRAW`.
+      - **Otherwise:** The game is `NOT_ENDED`.
+
 6. **UML class diagram**
 
    ```mermaid
@@ -249,6 +264,10 @@
    }
    ```
 
-   1. **Generalizing to N×N** only changes `Board`. It needs an `n_` size and a `vector<vector<char>>` grid, and `Judge` loops over `n` instead of 3. `Game`, `GameDisplay` and `PlayerInput` don't change. That is the payoff of keeping the rules inside `Board`.
-   2. A **leaderboard** would be a new class that `Game` reports results to, which is another association. Nothing existing needs editing.
-8. Next: a bigger real-world system with many object types and a capacity rule: the parking lot.
+
+   1. **Generalizing to N×N:** Only `Board` changes.
+      - It needs an `n_` size and a `vector<vector<char>>` grid.
+      - `Judge` loops over `n` instead of 3.
+      - `Game`, `GameDisplay` and `PlayerInput` do not change. That is the payoff of keeping the rules inside `Board`.
+   2. **Leaderboard:** It would be a new class that `Game` reports results to. That is another association. Nothing existing needs editing.
+8. **Next:** A bigger real-world system with many object types and a capacity rule: the parking lot.
