@@ -1,17 +1,17 @@
 # Lecture 14: MLQ | MLFQ
 
-- The algorithms so far (FCFS, SJF, RR, priority) are simple algorithms. Real operating systems do not implement them directly; they combine them in an optimised way. MLQ and MLFQ are such real-life designs.
+- **Simple algorithms:** FCFS, SJF, RR and priority are simple. Real operating systems combine them in an optimised way. MLQ and MLFQ are such real-life designs.
 
 1. Multi-level queue scheduling (**MLQ**)
-   a. Ready queue is divided into multiple queues depending upon priority.
-      - Earlier algorithms treated all processes (P1, P2, P3, ...) the same. MLQ first divides processes by their nature into three types, then splits the single ready queue into three logical divisions, one ready queue per type.
 
-   b. A process is permanently assigned to one of the queues (inflexible) based on some property of process, memory, size, process priority or process type.
-      - When a new process arrives, the OS looks at its nature (memory size it needs, its priority, its type) and pushes it into one of the queues.
-      - Once placed, it stays in that queue for its whole life and is scheduled there by that queue's algorithm. E.g., a system process always goes to, and stays in, the SP queue; it never moves to the IP queue.
+   a. The ready queue is divided into multiple queues depending on priority.
+      - MLQ divides processes by their nature into three types. Each type gets its own logical ready queue.
 
-   c. Each queue has its own scheduling algorithm. E.g., SP -> RR, IP -> RR & BP -> FCFS.
-      - Each queue can use any of the algorithms studied so far.
+   b. A process is permanently assigned to one queue (inflexible). The assignment is based on memory, size, process priority or process type.
+      - The process stays in that queue for its whole life. That queue's algorithm schedules it.
+      - **Example:** A system process always stays in the SP queue. It never moves to the IP queue.
+
+   c. Each queue has its own scheduling algorithm. For example, SP uses RR, IP uses RR and BP uses FCFS.
 
    ```
    Highest priority  |
@@ -22,62 +22,62 @@
    Lowest priority   v  ---> [ Batch process (BP) queue ]       --->
    ```
 
-   d. System process: Created by OS (Highest priority)
-      - These are the processes important for the OS's own working.
-      - Why highest priority: if the OS's own processes do not get priority, the OS cannot work properly.
+   d. The three process types:
 
-   Interactive process (Foreground process): Needs user input (I/O).
-   - E.g., Microsoft Word: it keeps waiting for user input (I/O).
-   - Called foreground because it is visible at the front of the user space (in the GUI).
-   - Placed after system processes; these are the user processes.
+   | Type | Also called | Priority | Notes |
+   |---|---|---|---|
+   | System process | | Highest | Created by the OS. |
+   | Interactive process | Foreground process | Middle | Needs user input (I/O). |
+   | Batch process | Background process | Lowest | Runs silently. Needs no user input. |
 
-   Batch process (Background process): Runs silently, no user input required.
-   - E.g., in a Unix terminal, `sleep 100 &` (the `&` used in the orphan/zombie process demo): the process runs in the background, needs no input and is not visible in front.
-   - Kept at the lowest priority, even though some batch processes may also be important.
+   - **System process:** It is important for the OS's own working. Without priority, the OS cannot work properly.
+   - **Interactive process:** It is a user process. It is visible at the front of the user space (in the GUI).
+     - **Example:** Microsoft Word keeps waiting for user input (I/O).
+   - **Batch process:** It is not visible in front.
+     - **Example:** In a Unix terminal, `sleep 100 &` (the `&` used in the orphan/zombie process demo).
+     - It is kept at the lowest priority, even though some batch processes may also be important.
 
-   e. Scheduling among different sub-queues is implemented as **fixed priority preemptive** scheduling. E.g., foreground queue has absolute priority over background queue.
-      - The fixed priority order is: SP queue > IP queue > BP queue.
-      - So MLQ has two levels of scheduling:
-        - Within a queue (intra-queue): the queue's own algorithm.
-        - Between queues (inter-queue): fixed priority preemptive scheduling.
+   e. Scheduling among sub-queues is **fixed priority preemptive**. For example, the foreground queue has absolute priority over the background queue.
+      - **Fixed priority order:** SP queue, then IP queue, then BP queue.
+      - **Intra-queue (within a queue):** The queue's own algorithm.
+      - **Inter-queue (between queues):** Fixed priority preemptive scheduling.
 
-   f. If an interactive process comes & batch process is currently executing. Then, batch process will be preempted.
-      - E.g., P2 (a batch process) is running on the CPU. A new process P1 arrives and it is an interactive process. The BP queue has the lowest priority, so P2 is preempted and P1 is scheduled.
-      - Similarly, if a system process arrives while an interactive process is running, the interactive process is preempted.
+   f. If an interactive process comes while a batch process is executing, the batch process is preempted.
+      - **Example:** P2 (batch) is running. Interactive P1 arrives. P2 is preempted and P1 is scheduled.
+      - **Similarly:** A system process arriving preempts a running interactive process.
 
-   g. Problem: Only after completion of all the processes from the top-level ready queue, the further level ready queues will be scheduled.
-      This came starvation for lower priority process.
-      - Until every process in the SP queue terminates or goes to wait, the IP and BP queues get no chance.
-      - Same as priority scheduling: the highest priority gets most CPU time, the lowest may never get a chance (indefinite waiting).
-      - Batch processes wait the most, so the overall average waiting time is high.
-      - MLQ cannot use ageing to fix this, because there is no inter-queue movement.
+   g. **Problem:** Lower-level queues are scheduled only after all processes in the top-level queue complete. This causes starvation for lower priority processes.
+      - The IP and BP queues get no chance until the SP queue terminates or waits.
+      - **Same as priority scheduling:** The lowest may never get a chance (indefinite waiting).
+      - **High average waiting time:** Batch processes wait the most.
+      - **No ageing:** MLQ cannot use ageing, because there is no inter-queue movement.
 
-   h. Convoy effect is present.
-      - MLQ tries to optimise for the real-world mix of processes, but the fixed priority between queues is the weak point: the SP queue gets most CPU time and the BP queue is effectively forgotten.
-      - MLQ is mostly a concept; it is hardly used today. MLFQ is its improved version.
+   h. The convoy effect is present.
+      - The fixed priority between queues is the weak point. The SP queue gets most CPU time and the BP queue is effectively forgotten.
+      - **Mostly a concept:** MLQ is hardly used today. MLFQ is its improved version.
 
 2. Multi-level feedback queue scheduling (**MLFQ**)
-   - Improved version of MLQ that tries to reduce MLQ's heavy convoy effect / starvation. It is used in OSes today (e.g., macOS uses MLFQ, with different types of priorities added on top).
+   - It is an improved version of MLQ. It reduces MLQ's heavy convoy effect and starvation.
+   - **Used today:** For example, macOS uses MLFQ, with different types of priorities added on top.
 
    a. Multiple sub-queues are present.
 
-   b. Allows the process to move between queues. The idea is to separate processes according to the characteristics of their BT. If a process uses too much CPU time, it will be moved to lower priority queue. This scheme leaves I/O bound and interactive processes in the higher-priority queue.
-      - Key difference from MLQ: inter-queue movement is allowed.
-      - Processes taking more time (higher BT) keep getting moved to lower queues.
-      - I/O bound / interactive processes go to wait every little while, needing user input (user presses Enter, Next, etc.). They are kept in / moved to the higher queues.
-      - Why interactive processes get high priority: you turn on the system and launch an application. If background or system processes got more CPU time and your application got none, the OS would not respond to the user. Nobody would want to work on such an OS.
+   b. A process can move between queues. Processes are separated by the characteristics of their BT. A process that uses too much CPU time moves to a lower priority queue. I/O bound and interactive processes stay in the higher-priority queue.
+      - **Key difference from MLQ:** Inter-queue movement is allowed.
+      - **I/O bound and interactive processes:** They go to wait every little while, needing user input (user presses Enter, Next, and so on). They stay in the higher queues.
+      - **Why interactive processes get high priority:** If background or system processes got more CPU time and your application got none, the OS would not respond to the user.
 
-   In addition, a process that waits too much in a lower-priority queue may be moved to a higher priority queue. This form of ageing prevents starvation.
-   - Problem it solves: processes that keep moving to lower queues can starve, because upper queues get more time.
-   - Ageing (same method as in priority scheduling): after a point, the priority of processes in lower queues is increased step by step, and they are moved up to higher queues.
-   - MLQ could not use ageing since it had no inter-queue movement; MLFQ can.
+   - **Ageing:** A process that waits too much in a lower-priority queue may be moved to a higher priority queue. This prevents starvation.
+     - **Problem it solves:** Processes that keep moving to lower queues can starve, because upper queues get more time.
+     - **Method (same as in priority scheduling):** The priority of processes in lower queues is increased step by step. They move up to higher queues.
+     - MLQ could not use ageing since it had no inter-queue movement. MLFQ can.
 
-   c. Less starvation then MLQ.
+   c. Starvation is less than in MLQ.
 
    d. It is flexible.
 
-   e. Can be configured to match a specific system design requirement.
-      - Things the designer can configure: when to send a process to a lower priority queue, at what interval to apply ageing (raise priority), whether interactive or system processes sit at the top, how much priority background processes get.
+   e. It can be configured to match a specific system design requirement.
+      - **Configurable:** when to send a process to a lower queue, the interval for ageing (raising priority), whether interactive or system processes sit at the top, and how much priority background processes get.
 
    Sample MLFQ design:
 
@@ -94,25 +94,26 @@
    new --->  [  FCFS  ]  ---> (done, exit)
    ```
 
-   - Queues 1 to 3 use RR with time quantum 2, 4 and 8 respectively; queue 4 uses FCFS.
-   - A new process first enters the top queue (TQ = 2).
+   - **Queues:** Queues 1 to 3 use RR with time quantum 2, 4 and 8. Queue 4 uses FCFS.
+   - **Entry:** A new process first enters the top queue (TQ = 2).
      - If its BT is at most 2, it finishes there and exits.
-     - If its BT is more than 2, it is moved to the next queue and gets TQ = 4; if still not done, TQ = 8; if still not done, it is scheduled FCFS.
-   - Benefit: processes with low BT do not starve. E.g., a process needing 1 sec exits right in the first queue.
-   - Each process gets multiple chances, with a growing time quantum, before being pushed to FCFS.
-   - More queues can be added; this is just a small sample.
-   - Ageing here: a process P1 with a large BT may fall through every queue to the FCFS queue and starve there. To prevent this, its priority is increased by ageing and it can be moved back up to a higher queue.
+     - If its BT is more than 2, it moves to the next queue with TQ = 4. If still not done, TQ = 8. If still not done, it is scheduled FCFS.
+   - **Benefit:** Processes with low BT do not starve. For example, a process needing 1 sec exits in the first queue.
+   - **Multiple chances:** Each process gets multiple chances, with a growing time quantum, before FCFS.
+   - **More queues:** More queues can be added. This is just a small sample.
+   - **Ageing here:** A process P1 with a large BT may fall to the FCFS queue and starve there. Ageing raises its priority and moves it back up.
 
-   Design of an MLFQ: the five things a designer decides (e.g., when building an OS):
-   1. Number of queues, based on the OS's requirements.
-   2. Scheduling algorithm for each queue.
-   3. Method to upgrade a process to a higher queue.
-      - E.g., ageing: if a process is stuck in the FCFS queue, its priority counter increases every 15 min (say), and it is moved to upper queues.
-      - So between queues there is a flexible priority scheduling (unlike MLQ's fixed priority).
-   4. Method to demote a process to a lower queue.
-      - In the sample: if the process does not finish within the queue's TQ, it is demoted to the next queue.
-   5. Which queue a process enters first.
-      - E.g., new processes can be sent to the top queue first, or a process known to be very slow can be sent directly to the FCFS queue.
+   **Design of an MLFQ:** the five things a designer decides.
+
+   1. **Number of queues,** based on the OS's requirements.
+   2. **Scheduling algorithm for each queue.**
+   3. **Method to upgrade a process to a higher queue.**
+      - **Example (ageing):** A process stuck in the FCFS queue gets its priority counter increased every 15 min (say) and moves to upper queues.
+      - So between queues there is flexible priority scheduling (unlike MLQ's fixed priority).
+   4. **Method to demote a process to a lower queue.**
+      - In the sample, a process that does not finish within the queue's TQ is demoted.
+   5. **Which queue a process enters first.**
+      - **Example:** New processes go to the top queue first. A process known to be very slow can go directly to the FCFS queue.
 
 3. Comparison:
 
@@ -123,47 +124,49 @@
    | Convoy effect | Yes | Yes | No | Yes | Yes | No | Yes | Yes |
    | Overhead | No | No | Yes | No | Yes | Yes | Yes | Yes |
 
-   - Overhead = context switching, which only happens with preemption.
-   - FCFS
-     - Design simple: implemented as a plain queue.
-     - No preemption. (Question: what is the preemptive version of FCFS? RR, from the previous lecture.)
-     - Convoy effect is heavy; convoy effect was first defined using FCFS. If the first process has the largest BT, all others keep waiting.
-     - No overhead: no preemption, so no context switching. Once P1 gets the CPU, it keeps it.
-   - SJF
-     - Design complex: calculating the correct BT of a process is nearly impossible.
-     - No preemption.
-     - Convoy effect: if a process with a large BT arrives at t = 0, it gets scheduled and runs to completion. A process P2 with smaller BT that arrives later cannot be scheduled.
-     - No overhead, since no preemption.
-   - PSJF
-     - Design complex: BT still has to be estimated.
-     - Preemption: when a job with a smaller BT arrives, the current one is preempted and the shorter one is scheduled.
-     - No convoy effect (negligible): it gives the lowest average waiting time.
-     - Overhead: yes, context switching due to preemption.
-   - Priority
-     - Design complex: deciding the right priority for a process is itself a hard decision.
-     - No preemption (non-preemptive version).
-     - Convoy effect is heavy (indefinite waiting).
-     - No overhead, since non-preemptive.
-   - P-Priority
-     - Design complex: same problem of assigning priority.
-     - Preemption: yes.
-     - Convoy effect: yes. Higher priority jobs keep getting scheduled; low priority jobs keep waiting (starvation).
-     - Overhead: yes, it is preemptive.
-   - RR
-     - Design simple: a simple block diagram (circular queue).
-     - Its best quality: lowest response time. Every process gets the CPU at least once quickly.
-     - Preemption: yes. If the process does not finish within the time quantum, it is preempted and the next job is taken.
-     - No convoy effect: no starvation, every process gets the CPU after a little while.
-     - Overhead: yes, context switching.
-   - MLQ
-     - Design complex: queues have to be built, and each process has to be assigned to the right queue.
-     - Preemption: yes. A high priority job (e.g. interactive) preempts a batch process.
-     - Convoy effect: yes. Low priority processes may never get CPU time (starvation).
-     - Overhead: yes, context switching.
-   - MLFQ
-     - Design complex.
-     - Preemption: yes.
-     - Convoy effect: yes, but reduced by ageing, not eliminated. Like deadlock avoidance/prevention later: no implementation is perfect, and a computer still hangs sometimes, whatever its specifications.
-     - Overhead: yes, context switching.
-   - Implement all these algorithms yourself; then in an interview you can explain what happens in each one.
-   - This completes CPU scheduling. Next topic: concurrency.
+   - **Overhead:** It means context switching, which only happens with preemption.
+
+   - **FCFS**
+     - **Design simple:** It is a plain queue.
+     - **No preemption.** The preemptive version of FCFS is RR.
+     - **Convoy effect is heavy:** The convoy effect was first defined using FCFS. If the first process has the largest BT, all others keep waiting.
+     - **No overhead:** Once P1 gets the CPU, it keeps it.
+
+   - **SJF**
+     - **Design complex:** Calculating the correct BT of a process is nearly impossible.
+     - **Convoy effect:** A process with a large BT arrives at t = 0 and runs to completion. A later process P2 with smaller BT cannot be scheduled.
+
+   - **PSJF**
+     - **Design complex:** BT still has to be estimated.
+     - **Preemption:** A smaller-BT job preempts the current one.
+     - **No convoy effect (negligible):** It gives the lowest average waiting time.
+     - **Overhead:** Preemption causes context switching.
+
+   - **Priority**
+     - **Design complex:** Deciding the right priority is itself a hard decision.
+     - **Convoy effect is heavy** (indefinite waiting).
+     - **No overhead,** since it is non-preemptive.
+
+   - **P-Priority**
+     - **Design complex:** Same problem of assigning priority.
+     - **Convoy effect:** Higher priority jobs keep getting scheduled. Low priority jobs keep waiting (starvation).
+     - **Overhead:** Yes, because it is preemptive.
+
+   - **RR**
+     - **Design simple:** A circular queue.
+     - **Best quality:** Lowest response time. Every process gets the CPU at least once quickly.
+     - **Preemption:** A process that does not finish within the time quantum is preempted.
+     - **No convoy effect:** Every process gets the CPU after a little while.
+     - **Overhead:** Yes, context switching.
+
+   - **MLQ**
+     - **Design complex:** Queues have to be built. Each process has to be assigned to the right queue.
+     - **Preemption:** A high priority job (for example interactive) preempts a batch process.
+     - **Convoy effect:** Low priority processes may never get CPU time (starvation).
+
+   - **MLFQ**
+     - **Design complex.**
+     - **Convoy effect:** Yes, but reduced by ageing, not eliminated. This is like deadlock avoidance and prevention later. No implementation is perfect. A computer still hangs sometimes, whatever its specifications.
+
+   - **Practice:** Implement all these algorithms yourself. Then in an interview you can explain what happens in each one.
+   - **Next topic:** Concurrency.
