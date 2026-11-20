@@ -1,117 +1,92 @@
 # Lecture 19: Database Scaling Patterns
 
-Step by Step Scaling
-
-- Lakshay
+Step by step scaling (Lakshay).
 
 ## What will you learn?
 
-- Step by Step manner, when to choose which Scaling option.
-- Which Scaling option is feasible practically at the moment.
+- **Choice:** In a step by step manner, when to choose which scaling option.
+- **Feasibility:** Which scaling option is practically feasible at the moment.
 
 ```
  [DB]  ------->  [DB]  [DB]  [DB]
 ```
 
-## A Case Study
+## A case study
 
-Cab Booking APP
+**Cab booking app.**
 
-- Tiny startup.
-- ~10 customers onboard.
-- A single small machine DB stores all customers, trips, locations, booking data, and customer trip history.
-- ~1 trip booking in 5 mins.
+- **Start:** A tiny startup with about 10 customers onboard.
+- **Setup:** A single small machine DB stores all customers, trips, locations, booking data and customer trip history.
+- **Load:** About 1 trip booking in 5 minutes.
 
-## Your App becoming famous, but…
+## Your app becomes famous, but...
 
-The PROBLEM begins
+The problem begins.
 
-- Requests scales upto 30 bookings per minute.
-- Your tiny DB system has started performing poorly.
-- API latency has increased a lot.
-- Transactions facing Deadlock, Starvation, and frequent failure.
-- Sluggish App experience.
-- Customer dis-satisfaction.
+- **Load:** Requests scale up to 30 bookings per minute.
+- **Performance:** Your tiny DB system starts performing poorly. API latency has increased a lot.
+- **Failures:** Transactions face deadlock, starvation and frequent failure.
+- **Experience:** The app feels sluggish. Customers are dissatisfied.
 
 ## Is there any solution?
 
 - We have to apply some kind of performance optimisation measures.
 - We might have to scale our system going forward.
 
-## Pattern 1
+## Pattern 1: Query optimisation and connection pool implementation
 
-Query Optimisation & Connection Pool Implementation
+- **Cache data:** Cache frequently used, non-dynamic data like booking history, payment history and user profiles.
+- **Redundancy:** Introduce database redundancy (or maybe use NoSQL).
+- **Connection pool:** Use connection pool libraries to **cache DB connections**. Multiple application threads can use the same DB connection.
+- **Result:** These are good optimisations as of now.
+- **Growth:** The business scales to one more city. It now gets about 100 bookings per minute.
 
-- Cache frequently used non-dynamic data like, booking history, payment history, user profiles etc.
-- Introduce Database Redundancy. (Or may be use NoSQL)
-- Use connection pool libraries to **Cache DB connections**.
-- Multiple application threads can use same DB connection.
-- Good optimisations as of now.
-- Scaled the business to one more city, and now getting ~100 booking per minute.
+## Pattern 2: Vertical scaling (scale up)
 
-## Pattern 2
+- **What:** Upgrade the initial tiny machine, for example RAM by 2x and SSD by 3x.
+- **Limit:** Scale up is pocket friendly only up to a point. The more you scale up, the more the cost increases exponentially.
+- **Result:** This is a good optimisation as of now.
+- **Growth:** The business grows. You decide to scale to 3 more cities. It now gets 300 bookings per minute.
 
-Vertical Scaling or Scale-up
+## Pattern 3: Command Query Responsibility Segregation (CQRS)
 
-- Upgrading our initial tiny machine.
-- RAM by 2x and SSD by 3x etc.
-- Scale up is pocket friendly till a point only.
-- More you scale up, cost increases exponentially.
-- Good Optimisation as of now.
-- Business is growing, you decided to scale it to 3 more cities and now getting 300 booking per minute.
+- **Problem:** The scaled-up big machine cannot handle all read and write requests.
+- **Idea:** Separate read and write operations, machine-wise (physical machines).
+- **Setup:** Add 2 more machines as replicas of the primary machine.
+  - All read queries go to the replicas.
+  - All write queries go to the primary.
+- **Growth:** The business grows. You decide to scale to 2 more cities.
+- **New problems:**
+  - The primary cannot handle all write requests.
+  - Lag between primary and replica hurts the user experience.
 
-## Pattern 3
+## Pattern 4: Multi primary replication
 
-Command Query Responsibility Segregation (CQRS)
+- **Idea:** Why not distribute write requests to replicas also?
+- **Setup:** All machines can work as primary and replica. A multi primary configuration is a logical circular ring.
+  - Write data to any node.
+  - Read data from any node that replies to the broadcast first.
+- **Growth:** You scale to 5 more cities and your system is in pain again (about 50 requests per second).
 
-- The scaled up big machine is not able to handle all read/write requests.
-- Separate read/write operations physical machine wise.
-- 2 more machines as replica to the primary machine.
-- All read queries to replicas.
-- All write queries to primary.
-- Business is growing, you decided to scale it to 2 more cities.
-- Primary is not able to handle all write requests.
-- Lag between primary and replica is impacting user experience.
+## Pattern 5: Partitioning of data by functionality
 
-## Pattern 4
+- **Idea:** What about separating the location tables into a separate DB schema?
+- **Setup:** Put that DB on separate machines, with a primary-replica or multi-primary configuration. Different DBs host data categorised by different functionality.
+- **Join:** The backend (application layer) has to take responsibility for joining the results.
+- **Growth:** You plan to expand your business to another country.
 
-Multi Primary Replication
+## Pattern 6: Horizontal scaling (scale out)
 
-- Why not distribute write request to replica also?
-- All machines can work as primary & replica.
-- Multi primary configuration is a logical circular ring.
-- Write data to any node.
-- Read data from any node that replies to the broadcast first.
-- You scale to 5 more cities & your system is in pain again. (~50 req/s)
+- **Sharding:** Use multiple shards. Allocate 50 machines, all with the same DB schema. Each machine holds just a part of the data.
+- **Locality:** Locality of data should be there.
+- **Replicas:** Each machine can have its own replicas. They may be used in failure recovery.
+- **Difficulty:** Sharding is generally hard to apply. But "No Pain, No Gain".
+- **Growth:** You scale the business across continents.
 
-## Pattern 5
+## Pattern 7: Data centre wise partition
 
-Partitioning of Data by Functionality
-
-- What about separating the location tables in separate DB schema?
-- What about putting that DB in separate machines with primary-replica or multi-primary configuration?
-- Different DB can host data categorised by different functionality.
-- Backend or application layer has to take responsibility to join the results.
-- Planning to expand your business to other country.
-
-## Pattern 6
-
-Horizontal Scaling or Scale-out
-
-- Sharding - multiple shards.
-- Allocate 50 machines - all having same DB schema - each machine just hold a part of data.
-- Locality of data should be there.
-- Each machine can have their own replicas, may be used in failure recovery.
-- Sharding is generally hard to apply. But “No Pain, No Gain”
-- Scaling the business across continents.
-
-## Pattern 7
-
-Data Centre Wise Partition
-
-- Requests travelling across continents are having high latency.
-- What about distributing traffic across data centres?
-- Data centres across continents.
-- Enable cross data centre replication which helps disaster recovery.
-- This always maintain Availability of your system.
-- Now, Plan for an IPO :p
+- **Problem:** Requests travelling across continents have high latency.
+- **Idea:** Distribute traffic across data centres. Place data centres across continents.
+- **Replication:** Enable cross data centre replication. It helps disaster recovery.
+- **Availability:** This always maintains the availability of your system.
+- **Next:** Now, plan for an IPO. :p
