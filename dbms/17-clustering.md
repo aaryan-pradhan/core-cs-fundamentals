@@ -1,32 +1,49 @@
 # Lecture 17: Clustering in DBMS
 
-1. **Database Clustering** (making **Replica-sets**) is the process of combining more than one servers or instances connecting a single database. Sometimes one server may not be adequate to manage the amount of data or the number of requests, that is when a Data Cluster is needed. Database clustering, SQL server clustering, and SQL clustering are closely associated with SQL is the language used to manage the database information.
-   - Cluster = bundle / collection / group of servers (nodes) holding the same database.
-   - Example problem: one database holds all info, millions of customers send millions of requests daily from all over the world. One DB on one computer, however much it is scaled vertically (super computer), cannot serve worldwide requests easily.
-   - If that one database/computer goes down, availability is gone: website down, users shout.
-   - Clustering became popular with the internet; mostly used with NoSQL, where multiple servers and horizontal scaling are needed. Works with SQL too.
-   - MongoDB is a good example: it provides replica sets (replication) so you can make replicas of the database.
-2. Replicate the same dataset on different servers.
-   - Make servers S1, S2, S3 holding databases D1, D2, D3 where D1 = D2 = D3: same data stored on all three servers.
-   - Not that S1 holds more users and S2 fewer. Every server holds the same users' data (e.g. 1000 users on each).
-   - This set of servers / replicas is one cluster. Architecture: create same instances, make replicas, store them as a cluster.
-   - Server / node / host = a capable computer connected to the internet whose main job is to store data, take requests, process the data and send it back.
+1. **Database clustering** means making **replica sets**. It combines more than one server or instance that connect to a single database.
+   - **Why:** Sometimes one server cannot handle the amount of data or the number of requests. Then a data cluster is needed.
+   - **Related terms:** Database clustering, SQL server clustering and SQL clustering are closely associated. SQL is the language used to manage the database information.
+   - **Cluster:** A bundle, collection or group of servers (nodes) holding the same database.
+   - **Example problem:** One database holds all the info. Millions of customers send millions of requests daily from all over the world. One DB on one computer cannot serve worldwide requests easily, however much it is scaled vertically (super computer).
+   - **Availability risk:** If that one database or computer goes down, availability is gone. The website is down and users shout.
+   - **Popularity:** Clustering became popular with the internet. It is mostly used with NoSQL, where multiple servers and horizontal scaling are needed. It works with SQL too.
+   - **Example:** MongoDB provides replica sets (replication), so you can make replicas of the database.
+
+2. **Replicate the same dataset on different servers.**
+   - Make servers S1, S2 and S3 holding databases D1, D2 and D3. D1 = D2 = D3, so the same data is stored on all three servers.
+   - It is not the case that S1 holds more users and S2 fewer. Every server holds the same users' data (for example 1000 users on each).
+   - This set of servers (replicas) is one cluster.
+   - **Architecture:** Create the same instances, make replicas, and store them as a cluster.
+   - **Server / node / host:** A capable computer connected to the internet. Its main job is to store data, take requests, process the data and send it back.
+
 3. **Advantages**
-   1. **Data Redundancy:** Clustering of databases helps with data redundancy, as we store the same data at multiple servers. Don't confuse this data redundancy as repetition of the same data that might lead to some anomalies. The redundancy that clustering offers is required and is quite certain due to the synchronisation. In case any of the servers had to face a failure due to any possible reason, the data is available at other servers to access.
-      - Not the redundancy that causes anomalies (same student stored repeatedly inside one database). Here the same data is replicated across different servers; within the same database it is not duplicated.
-      - Redundancy is not always bad; here it makes the system robust and highly available.
-      - Example: S1 shuts down (hacker attack, illegal activity detected, regular maintenance, any problem with the node). With a single server the website would go down. With replicas, the user never knows whether data came from S1 or S2; S2 returns the same data. Website stays on.
-      - A layer of abstraction is added: the user does not know whether data comes from S1, S2 or S3. This is hidden from the user.
-   2. **Load balancing:** or scalability doesn't come by default with the database. It has to be brought by clustering regularly. It also depends on the setup. Basically, what load balancing does is allocating the workload among the different servers that are part of the cluster. This indicates that more users can be supported and if for some reasons if a huge spike in the traffic appears, there is a higher assurance that it will be able to support the new traffic. One machine is not going to get all of the hits. This can provide scaling seamlessly as required. This **links directly to high availability.** Without load balancing, a particular machine could get overworked and traffic would slow down, leading to decrement of the traffic to zero.
-      - With one server and millions of requests, all are handled sequentially by it: it gets highly loaded, may hang or crash.
-      - With replicas, give some requests to S1, some to S2, some to S3. Load is balanced and no system crashes.
-      - Load balancing is done so that requests execute fast (an overloaded server delays) and so that no single server crashes. Both point to availability.
-      - Needs a layer / logic / interface: the load balancer. Requests arrive at the load balancer; it checks which server (S1, S2, S3) is less loaded and passes the new request to it.
-      - So with replica sets the architecture needs a load balancer.
-   3. **High availability:** When you can access a database, it implies that it is available. High availability refers the amount of time a database is considered available. The amount of availability you need greatly depends on the number of transactions you are running on your database and how often you are running any kind of analytics on your data. With database clustering, we can reach extremely high levels of availability due to load balancing and have extra machines. In case a server got shut down the database will, however, be available.
-      - If S1 goes down, S2 and S3 are available as backup, so at any point of time some server will execute the request.
-      - Website should always stay on.
-4. **How does Clustering Work?**
-   1. In cluster architecture, all requests are split with many computers so that an individual user request is executed and produced by a number of computer systems. The clustering is serviceable definitely by the ability of load balancing and high-availability. If one node collapses, the request is handled by another node. Consequently, there are few or no possibilities of absolute system failures.
-      - The load balancer sends each incoming request to the less loaded server / node.
-      - Used in real life by big product-based companies for internet products, to ensure high availability and a seamless user experience: website never goes down.
+
+   1. **Data redundancy:** The same data is stored on multiple servers. If any server fails for any reason, the data is available on the other servers.
+      - **Not harmful:** This is not the repetition of data that leads to anomalies (the same student stored repeatedly inside one database). Here the same data is replicated across different servers. Within one database it is not duplicated.
+      - **Required:** The redundancy that clustering offers is required. It is certain because of synchronisation. It is not always bad. Here it makes the system robust and highly available.
+      - **Example:** S1 shuts down (hacker attack, illegal activity detected, regular maintenance, or any problem with the node). With a single server, the website would go down. With replicas, S2 returns the same data. The user never knows whether data came from S1 or S2. The website stays on.
+      - **Abstraction:** A layer of abstraction is added. The user does not know whether data comes from S1, S2 or S3. This is hidden from the user.
+
+   2. **Load balancing:** Load balancing (scalability) does not come by default with a database. Clustering has to bring it. It also depends on the setup.
+      - **What it does:** It allocates the workload among the different servers in the cluster. One machine does not get all the hits.
+      - **Benefit:** More users can be supported. If traffic spikes, there is higher assurance that the new traffic is supported. Scaling is seamless.
+      - **Link to availability:** This links directly to high availability. Without load balancing, one machine could get overworked and traffic would slow down. Then traffic would drop to zero.
+      - **Single server:** With one server and millions of requests, the server handles all of them sequentially. It gets highly loaded and may hang or crash.
+      - **With replicas:** Give some requests to S1, some to S2 and some to S3. The load is balanced and no system crashes.
+      - **Why balance:** Requests execute fast (an overloaded server delays them). No single server crashes. Both point to availability.
+      - **Load balancer:** This needs a layer, logic or interface called the load balancer. Requests arrive at the load balancer. It checks which server (S1, S2 or S3) is less loaded and passes the new request to it.
+      - **Architecture:** With replica sets, the architecture needs a load balancer.
+
+   3. **High availability:** If you can access a database, it is available. High availability is the amount of time a database is considered available.
+      - **How much:** The availability you need depends on the number of transactions you run and how often you run analytics on your data.
+      - **How clustering helps:** Load balancing and extra machines give extremely high availability. If a server shuts down, the database is still available.
+      - **Backup:** If S1 goes down, S2 and S3 are available as backup. At any point of time, some server will execute the request.
+      - **Goal:** The website should always stay on.
+
+4. **How does clustering work?**
+
+   1. In cluster architecture, requests are split across many computers. One user request is executed and produced by a number of computer systems.
+      - **Basis:** Clustering works because of load balancing and high availability.
+      - **Failure:** If one node collapses, another node handles the request. So there are few or no chances of a total system failure.
+      - **Routing:** The load balancer sends each incoming request to the less loaded server (node).
+      - **Real life:** Big product-based companies use it for internet products. It ensures high availability and a seamless user experience. The website never goes down.
