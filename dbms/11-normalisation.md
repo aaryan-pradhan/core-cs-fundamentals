@@ -8,6 +8,12 @@
    1. **Meaning:** If the value of A is given, the value of B can be found (`A -> B`). A can be a single attribute or a set of attributes. A composite primary key has more than one attribute.
    2. **Candidate keys:** They also count, since the primary key is chosen from the candidate keys.
    3. **Example:** Employee(id, name, department) with id as primary key. We have `id -> name` and `id -> department`. Given an id, the name and the department can be looked up in the table.
+
+      ```mermaid
+      flowchart LR
+        id["id (determinant)"] --> name["name (dependent)"]
+        id --> dept["department (dependent)"]
+      ```
    4. It is only a mathematical way of saying which attribute depends on which.
 2. In `X -> Y`, the left side is the **Determinant**. The right side is the **Dependent**.
    1. **Determinant:** The attribute whose value is given.
@@ -40,6 +46,24 @@
    3. **Transitivity**
       1. If A determines B and B determines C, then A determines C.
       2. In symbols: if `A -> B` and `B -> C`, then `A -> C`.
+
+   ```mermaid
+   flowchart LR
+     subgraph R["Reflexive"]
+       direction LR
+       X1["X = {A,B,C,D,E}"] --> Y1["Y = {A,B,C}<br/>(Y inside X)"]
+     end
+     subgraph AU["Augmentation"]
+       direction LR
+       X2["X"] --> Y2["Y"]
+       XZ["XZ"] --> YZ["YZ"]
+     end
+     subgraph TR["Transitivity"]
+       direction LR
+       A3["A"] --> B3["B"] --> C3["C"]
+       A3 -. "derived" .-> C3
+     end
+   ```
 5. **Worked problems using the rules** (is the FD valid or illegal?)
    1. Relation (A, B, C, D, E). Given FDs: `A -> B`, `A -> C`, `CD -> E`, `B -> D`, `E -> A`.
       1. **Can `BC -> CD` be derived?** `B -> D` is given. Augment both sides with C to get `BC -> CD`. Valid.
@@ -49,6 +73,15 @@
       1. `CD -> E` is given and `E -> A` is given. By transitivity, `CD -> A`.
       2. `CD -> C` holds by reflexivity (C is a subset of CD).
       3. `CD -> A` and `CD -> C` together give `CD -> AC`. Valid.
+
+      ```mermaid
+      flowchart LR
+        CD["CD"] -- "given" --> E["E"] -- "given" --> A["A"]
+        CD -. "transitivity" .-> A
+        CD -. "reflexive" .-> C["C"]
+        A --> AC["AC"]
+        C --> AC
+      ```
 
 ## 3. Why Normalisation?
 
@@ -68,6 +101,18 @@
       1. **Example:** A new student enrols but has not chosen a branch yet (counselling is going on). Either the student cannot be added, or the branch columns are set to NULL and updated later. This is double work.
       2. **Example:** A new IT department is started with branch code 4, but no student has enrolled in it. The IT branch cannot be added to the table, or it is added with NULL student values.
       3. A student and a branch exist independently, but were merged into one table.
+
+   ```mermaid
+   erDiagram
+     STUDENT_BRANCH {
+       int id PK
+       string name
+       int age
+       int branch_code
+       string branch_name "repeats per student"
+       string branch_hod "repeats per student"
+     }
+   ```
 3. **Deletion anomaly**
    1. Deleting data causes the unintended loss of some other important data.
       1. **Example:** The only Mechanical student passes out and his row is deleted. The Mechanical branch itself disappears from the DB, as if the university never offered Mechanical.
@@ -89,6 +134,22 @@
       2. Table 2: Branch Info(branch code, branch name, HOD name).
       3. Now a new IT department can be added with its HOD without enrolling any student. A student deletion does not remove a branch. An HOD change is made in one row. There is no insertion, deletion or updation anomaly.
       4. The DB is easier to view and search.
+
+      ```mermaid
+      erDiagram
+        BRANCH_INFO ||--o{ STUDENT : "has"
+        STUDENT {
+          int id PK
+          string name
+          int age
+          int branch_code FK
+        }
+        BRANCH_INFO {
+          int branch_code PK
+          string branch_name
+          string hod_name
+        }
+      ```
 2. Normalisation divides composite attributes into individual attributes, or divides a larger table into smaller ones and links them using relationships.
    1. **What we do:** Decompose a table into multiple tables.
    2. **SRP (Single Responsibility Principle):** Keep decomposing until SRP is achieved. One table should have one job. It should represent a single idea or a single thing. In the example the Student table also stored branch information, so it had two responsibilities.
@@ -103,6 +164,11 @@
 | 2NF | 1NF | No partial dependency. |
 | 3NF | 2NF | No transitive dependency. |
 | BCNF | 3NF | For `A -> B`, A must be a super key. |
+
+```mermaid
+flowchart LR
+  U["Unnormalised"] -- "atomic values" --> N1["1NF"] -- "remove partial<br/>dependency" --> N2["2NF"] -- "remove transitive<br/>dependency" --> N3["3NF"] -- "every determinant<br/>a super key" --> BC["BCNF"]
+```
 
 1. **1NF**
    1. Every relation cell must have an atomic value.
@@ -123,12 +189,41 @@
          3. **Problem:** A and B together form the primary key, so both cannot be NULL together, but one of them can be NULL. If B is NULL, then `B -> C` cannot hold, because NULL cannot determine a value. So a partial dependency cannot be kept.
          4. **Rule:** The whole primary key together must determine another attribute, not a part of it.
       3. **Converting to 2NF:** Decompose into R1(A, B, D) with primary key (A, B), and R2(B, C) with primary key B. Now `AB -> D` and `B -> C` are both full dependencies.
+
+         ```mermaid
+         flowchart LR
+           subgraph Before["R(A, B, C, D), PK {A, B}"]
+             direction LR
+             AB["A, B"] -- "full" --> D["D"]
+             B["B (part of PK)"] -- "partial" --> C["C"]
+           end
+           Before -- "decompose" --> R1["R1(A, B, D)<br/>PK (A, B)"]
+           Before -- "decompose" --> R2["R2(B, C)<br/>PK B"]
+         ```
       4. **Real-life example:** StudentProject(student id, project id, student name, project name), primary key (student id, project id). It is in 1NF, since all values are atomic.
          1. Prime: student id, project id. Non-prime: student name, project name.
          2. FDs: `student id -> student name`, `project id -> project name`. Each non-prime attribute depends on part of the primary key, so there are partial dependencies.
          3. Decompose: Student(student id, student name) with student id as PK, and Project(project id, project name) with project id as PK.
          4. Now each non-prime attribute is fully dependent on its table's primary key.
          5. Keep project id in the table linking student and project, as a foreign key. This keeps the two tables linked (student id and project id are primary and foreign keys).
+
+         ```mermaid
+         erDiagram
+           STUDENT ||--o{ STUDENT_PROJECT : "works on"
+           PROJECT ||--o{ STUDENT_PROJECT : "has"
+           STUDENT {
+             int student_id PK
+             string student_name
+           }
+           PROJECT {
+             int project_id PK
+             string project_name
+           }
+           STUDENT_PROJECT {
+             int student_id PK,FK
+             int project_id PK,FK
+           }
+         ```
 3. **3NF**
    1. The relation must be in 2NF.
    2. No transitive dependency exists.
@@ -137,6 +232,16 @@
          2. **Check 2NF first:** Values are atomic, and B and C are fully dependent on the primary key A, so there is no partial dependency. It is in 2NF.
          3. **Redundancy:** Wherever B has the same value, C repeats (every B = 1 has C = x, and so on).
       2. **Converting to 3NF:** Decompose into R1(A, B) with PK A and R2(B, C) with PK B. Now the repeated C values are stored once per B, and the redundancy is gone.
+
+         ```mermaid
+         flowchart LR
+           subgraph Before["R(A, B, C), PK A"]
+             direction LR
+             A["A (PK)"] --> B["B (non-prime)"] -- "transitive" --> C["C (non-prime)"]
+           end
+           Before -- "decompose" --> R1["R1(A, B)<br/>PK A"]
+           Before -- "decompose" --> R2["R2(B, C)<br/>PK B"]
+         ```
 4. **BCNF (Boyce-Codd normal form)**
    1. The relation must be in 3NF.
       1. BCNF is a stronger version of 3NF.
@@ -153,9 +258,29 @@
          3. It is in 1NF, 2NF (no partial dependency) and 3NF.
          4. **FDs:** `(student id, subject) -> professor`, and `professor -> subject` (because a professor teaches only one subject).
          5. In `professor -> subject`, subject is a prime attribute and it is derived from a non-prime attribute (professor). Also, professor is not a super key. So it is not in BCNF.
+
+         ```mermaid
+         flowchart LR
+           K["(student id, subject)<br/>PK"] --> P["professor<br/>(non-prime)"]
+           P -- "not a super key,<br/>finds a prime attribute" --> S["subject<br/>(prime)"]
+         ```
       3. **Converting to BCNF:** Decompose into Student(student id, professor id) and Professor(professor id, professor name/subject) with professor id as the primary key.
          1. **Example data:** PJ gives Java, PC gives C++, PJ2 gives Java. Each has a separate professor id.
          2. Now the professor id (prime) finds all non-prime attributes, and no non-prime attribute finds a prime attribute. BCNF holds.
+
+         ```mermaid
+         erDiagram
+           PROFESSOR ||--o{ STUDENT : "teaches"
+           STUDENT {
+             int student_id PK
+             int professor_id PK,FK
+           }
+           PROFESSOR {
+             int professor_id PK
+             string professor_name
+             string subject
+           }
+         ```
    3. **Summary of the forms using `alpha -> beta`:**
 
       | Form | Rule |
