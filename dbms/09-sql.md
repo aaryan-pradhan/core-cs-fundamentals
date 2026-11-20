@@ -2,25 +2,30 @@
 
 ## LEC-9: SQL in 1-Video
 
-1. **SQL**: Structured Query Language, used to access and manipulate data.
-2. SQL used **CRUD** operations to communicate with DB.
-    1. **CREATE** - execute INSERT statements to insert new tuple into the relation.
-    2. **READ** - Read data already in the relations.
-    3. **UPDATE** - Modify already inserted data in the relation.
-    4. **DELETE** - Delete specific data point/tuple/row or multiple rows.
-3. **SQL is not DB, is a query language.**
-4. What is **RDBMS**? (Relational Database Management System)
-    1. Software that enable us to implement designed relational model.
-    2. e.g., MySQL, MS SQL, Oracle, IBM etc.
-    3. Table/Relation is the simplest form of data storage object in R-DB.
-    4. **MySQL** is open-source RDBMS, and it uses SQL for all CRUD operations
-5. **MySQL** used client-server model, where client is CLI or frontend that used services provided by MySQL server.
+1. **SQL:** Structured Query Language. It is used to access and manipulate data.
+2. SQL uses **CRUD** operations to communicate with the DB.
+
+   | Operation | Meaning |
+   |-----------|---------|
+   | **CREATE** | Execute INSERT statements to insert a new tuple into the relation. |
+   | **READ** | Read data already in the relations. |
+   | **UPDATE** | Modify data already inserted in the relation. |
+   | **DELETE** | Delete a specific data point (tuple, row) or multiple rows. |
+
+3. **SQL is not a DB.** It is a query language.
+4. **RDBMS:** Relational Database Management System.
+   1. It is software that implements a designed relational model.
+   2. **Examples:** MySQL, MS SQL, Oracle, IBM.
+   3. A table (relation) is the simplest data storage object in a relational DB.
+   4. **MySQL** is an open-source RDBMS that uses SQL for all CRUD operations.
+5. **MySQL client-server model:** The client is a CLI or frontend that uses services of the MySQL server.
 6. **Difference between SQL and MySQL**
-    1. SQL is Structured Query language used to perform CRUD operations in R-DB, while MySQL is a RDBMS used to store, manage and administrate DB (provided by itself) using SQL.
+   1. SQL is the Structured Query Language used to perform CRUD operations in a relational DB.
+   2. MySQL is an RDBMS. It stores, manages and administrates the DB (provided by itself) using SQL.
 
 ## SQL DATA TYPES (Ref: https://www.w3schools.com/sql/sql_datatypes.asp)
 
-1. In SQL DB, data is stored in the form of tables.
+1. In an SQL DB, data is stored in tables.
 2. Data can be of different types, like INT, CHAR etc.
 
 | DATATYPE | Description |
@@ -51,102 +56,108 @@
 | BOOLEAN | 0/1 |
 | BIT | e.g., BIT(n), n upto 64, store values in bits. |
 
-3. Size: TINY < SMALL < MEDIUM < INT < BIGINT.
-4. **Variable length Data types** e.g., VARCHAR, are better to use as they occupy space equal to the actual data size.
-5. Values can also be unsigned e.g., INT UNSIGNED.
+3. **Size order:** TINY < SMALL < MEDIUM < INT < BIGINT.
+4. **Variable length data types:** Types like VARCHAR are better to use, because they occupy space equal to the actual data size.
+5. **Unsigned:** Values can also be unsigned, for example `INT UNSIGNED`.
 6. **Types of SQL commands:**
-    1. **DDL** (data definition language): defining relation schema.
-        1. **CREATE**: create table, DB, view.
-        2. **ALTER TABLE**: modification in table structure. e.g, change column datatype or add/remove columns.
-        3. **DROP**: delete table, DB, view.
-        4. **TRUNCATE**: remove all the tuples from the table.
-        5. **RENAME**: rename DB name, table name, column name etc.
-    2. **DRL/DQL** (data retrieval language / data query language): retrieve data from the tables.
-        1. **SELECT**
-    3. **DML** (data modification language): use to perform modifications in the DB
-        1. **INSERT**: insert data into a relation
-        2. **UPDATE**: update relation data.
-        3. **DELETE**: delete row(s) from the relation.
-    4. **DCL** (Data Control language): grant or revoke authorities from user.
-        1. **GRANT**: access privileges to the DB
-        2. **REVOKE**: revoke user access privileges.
-    5. **TCL** (Transaction control language): to manage transactions done in the DB
-        1. **START TRANSACTION**: begin a transaction
-        2. **COMMIT**: apply all the changes and end transaction
-        3. **ROLLBACK**: discard changes and end transaction
-        4. **SAVEPOINT**: checkout within the group of transactions in which to rollback.
+
+   1. **DDL (Data Definition Language):** It defines the relation schema.
+      1. **CREATE:** create table, DB, view.
+      2. **ALTER TABLE:** modify the table structure. For example, change a column datatype or add or remove columns.
+      3. **DROP:** delete table, DB, view.
+      4. **TRUNCATE:** remove all the tuples from the table.
+      5. **RENAME:** rename DB name, table name, column name etc.
+   2. **DRL/DQL (Data Retrieval Language / Data Query Language):** It retrieves data from the tables.
+      1. **SELECT**
+   3. **DML (Data Modification Language):** It modifies data in the DB.
+      1. **INSERT:** insert data into a relation.
+      2. **UPDATE:** update relation data.
+      3. **DELETE:** delete row(s) from the relation.
+   4. **DCL (Data Control Language):** It grants or revokes authorities from users.
+      1. **GRANT:** give access privileges to the DB.
+      2. **REVOKE:** take back user access privileges.
+   5. **TCL (Transaction Control Language):** It manages transactions done in the DB.
+      1. **START TRANSACTION:** begin a transaction.
+      2. **COMMIT:** apply all the changes and end the transaction.
+      3. **ROLLBACK:** discard changes and end the transaction.
+      4. **SAVEPOINT:** a checkpoint within the group of transactions to roll back to.
 
 ## MANAGING DB (DDL)
 
 1. **Creation of DB**
-    1. **CREATE DATABASE IF NOT EXISTS db-name;**
-    2. **USE** db-name; //need to execute to choose on which DB CREATE TABLE etc commands will be executed. //make switching between DBs possible.
-    3. **DROP** DATABASE IF EXISTS db-name; //dropping database.
-    4. **SHOW** DATABASES; //list all the DBs in the server.
-    5. **SHOW** TABLES; //list tables in the selected DB.
+   1. `CREATE DATABASE IF NOT EXISTS db-name;`
+   2. `USE db-name;` You must run it to choose the DB on which CREATE TABLE etc. will run. It makes switching between DBs possible.
+   3. `DROP DATABASE IF EXISTS db-name;` drops the database.
+   4. `SHOW DATABASES;` lists all the DBs in the server.
+   5. `SHOW TABLES;` lists tables in the selected DB.
 
 ## DATA RETRIEVAL LANGUAGE (DRL)
 
-1. Syntax: SELECT <set of column names> FROM <table_name>;
-2. Order of execution from RIGHT to LEFT.
-3. Q. Can we use SELECT keyword without using FROM clause?
-    1. Yes, using DUAL Tables.
-    2. Dual tables are dummy tables created by MySQL, help users to do certain obvious actions without referring to user defined tables.
-    3. e.g., SELECT 55 + 11;
-       SELECT now();
-       SELECT ucase(); etc.
+1. **Syntax:** `SELECT <set of column names> FROM <table_name>;`
+2. Order of execution is from RIGHT to LEFT.
+3. Q. Can we use SELECT without a FROM clause?
+   1. Yes, using DUAL tables.
+   2. DUAL tables are dummy tables created by MySQL. They let you do simple actions without user-defined tables.
+   3. **Examples:**
+      ```sql
+      SELECT 55 + 11;
+      SELECT now();
+      SELECT ucase();
+      ```
 4. **WHERE**
-    1. Reduce rows based on given conditions.
-    2. E.g., SELECT * FROM customer WHERE age > 18;
+   1. It reduces rows based on given conditions.
+   2. **Example:** `SELECT * FROM customer WHERE age > 18;`
 5. **BETWEEN**
-    1. SELECT * FROM customer WHERE age between 0 **AND** 100;
-    2. In the above e.g., 0 and 100 are inclusive.
+   1. `SELECT * FROM customer WHERE age between 0 AND 100;`
+   2. In this example, 0 and 100 are inclusive.
 6. **IN**
-    1. Reduces **OR** conditions;
-    2. e.g., SELECT * FROM officers WHERE officer_name IN ('Lakshay', 'Maharana Pratap', 'Deepika');
+   1. It reduces **OR** conditions.
+   2. **Example:** `SELECT * FROM officers WHERE officer_name IN ('Lakshay', 'Maharana Pratap', 'Deepika');`
 7. **AND/OR/NOT**
-    1. AND: WHERE cond1 AND cond2
-    2. OR: WHERE cond1 OR cond2
-    3. NOT: WHERE col_name NOT IN (1,2,3,4);
+   1. **AND:** `WHERE cond1 AND cond2`
+   2. **OR:** `WHERE cond1 OR cond2`
+   3. **NOT:** `WHERE col_name NOT IN (1,2,3,4);`
 8. **IS NULL**
-    1. e.g., SELECT * FROM customer WHERE prime_status is NULL;
-9. **Pattern Searching / Wildcard ('%', '_')**
-    1. '%', any number of character from 0 to n. Similar to '*' asterisk in regex.
-    2. '_', only one character.
-    3. SELECT * FROM customer WHERE name **LIKE** '%p_';
+   1. **Example:** `SELECT * FROM customer WHERE prime_status is NULL;`
+9. **Pattern searching / wildcard ('%', '_')**
+   1. `%` matches any number of characters, from 0 to n. It is similar to the `*` asterisk in regex.
+   2. `_` matches only one character.
+   3. **Example:** `SELECT * FROM customer WHERE name LIKE '%p_';`
 10. **ORDER BY**
-    1. Sorting the data retrieved using **WHERE** clause.
-    2. ORDER BY <column-name> DESC;
-    3. DESC = Descending and ASC = Ascending
-    4. e.g., SELECT * FROM customer ORDER BY name DESC;
+    1. It sorts the data retrieved using the **WHERE** clause.
+    2. **Syntax:** `ORDER BY <column-name> DESC;`
+    3. DESC means descending. ASC means ascending.
+    4. **Example:** `SELECT * FROM customer ORDER BY name DESC;`
 11. **GROUP BY**
-    1. GROUP BY Clause is used to collect data from multiple records and group the result by one or more column. It is generally used in a SELECT statement.
-    2. Groups into category based on column given.
-    3. SELECT c1, c2, c3 FROM sample_table WHERE cond GROUP BY c1, c2, c3.
-    4. All the column names mentioned after SELECT statement shall be repeated in GROUP BY, in order to successfully execute the query.
-    5. Used with aggregation functions to perform various actions.
-        1. COUNT()
-        2. SUM()
-        3. AVG()
-        4. MIN()
-        5. MAX()
+    1. GROUP BY collects data from multiple records and groups the result by one or more columns, generally in a SELECT statement.
+    3. **Syntax:** `SELECT c1, c2, c3 FROM sample_table WHERE cond GROUP BY c1, c2, c3.`
+    4. All the column names after SELECT must be repeated in GROUP BY, for the query to execute successfully.
+    5. It is used with aggregation functions to perform various actions:
+       - COUNT()
+       - SUM()
+       - AVG()
+       - MIN()
+       - MAX()
 12. **DISTINCT**
-    1. Find distinct values in the table.
-    2. SELECT DISTINCT(col_name) FROM table_name;
-    3. GROUP BY can also be used for the same
-        1. "Select col_name from table GROUP BY col_name;" same output as above DISTINCT query.
-        2. SQL is smart enough to realise that if you are using GROUP BY and not using any aggregation function, then you mean "DISTINCT".
+    1. It finds distinct values in the table.
+    2. **Syntax:** `SELECT DISTINCT(col_name) FROM table_name;`
+    3. GROUP BY can also do the same.
+       1. `Select col_name from table GROUP BY col_name;` gives the same output as the DISTINCT query above.
+       2. SQL is smart enough to realise that if you use GROUP BY without any aggregation function, you mean "DISTINCT".
 13. **GROUP BY HAVING**
-    1. Out of the categories made by GROUP BY, we would like to know only particular thing (cond).
-    2. Similar to WHERE.
-    3. Select COUNT(cust_id), country from customer GROUP BY country HAVING COUNT(cust_id) > 50;
-    4. WHERE vs HAVING
-        1. Both have same function of filtering the row base on certain conditions.
-        2. WHERE clause is used to filter the rows from the table based on specified condition
-        3. HAVING clause is used to filter the rows from the groups based on the specified condition.
-        4. HAVING is used after GROUP BY while WHERE is used before GROUP BY clause.
-        5. If you are using HAVING, GROUP BY is necessary.
-        6. WHERE can be used with SELECT, UPDATE & DELETE keywords while GROUP BY used with SELECT.
+    1. Out of the categories made by GROUP BY, we want only a particular thing (a condition).
+    2. It is similar to WHERE.
+    3. **Example:** `Select COUNT(cust_id), country from customer GROUP BY country HAVING COUNT(cust_id) > 50;`
+    4. **WHERE vs HAVING**
+
+       | WHERE | HAVING |
+       |-------|--------|
+       | Filters rows from the table based on the specified condition. | Filters rows from the groups based on the specified condition. |
+       | Used before GROUP BY. | Used after GROUP BY. |
+       | GROUP BY is not needed. | GROUP BY is necessary. |
+       | Can be used with SELECT, UPDATE and DELETE. | Used with SELECT. |
+
+       - Both filter rows based on conditions.
 
 ## CONSTRAINTS (DDL)
 
@@ -167,10 +178,10 @@
 
     (Handwritten slide: the primary key can be declared inline on the column, `id INT PRIMARY KEY`, or as a separate line, `PRIMARY KEY (id)`; "choose one of the two ways".)
 
-    1. PK is not null, unique and only one per table.
+    1. A PK is not null, unique, and one per table.
 2. **Foreign Key**
-    1. FK refers to PK of other table.
-    2. Each relation can having any number of FK.
+    1. An FK refers to the PK of another table.
+    2. Each relation can have any number of FKs.
     3. ```sql
        CREATE TABLE ORDER (
        id INT PRIMARY KEY,
@@ -181,7 +192,7 @@
        );
        ```
 3. **UNIQUE**
-    1. Unique, can be null, table can have multiple unique attributes.
+    1. It is unique, it can be null, and a table can have multiple unique attributes.
     2. ```sql
        CREATE TABLE customer (
        ...
@@ -197,9 +208,9 @@
        ...
        );
        ```
-    2. "age_check", can also avoid this, MySQL generates name of constraint automatically.
+    2. The name "age_check" is optional. MySQL generates the constraint name automatically.
 5. **DEFAULT**
-    1. Set default value of the column.
+    1. It sets the default value of the column.
     2. ```sql
        CREATE TABLE account (
        ...
@@ -207,46 +218,40 @@
        ...
        );
        ```
-6. An attribute can be **PK and FK both** in a table.
+6. **PK and FK together:** An attribute can be both PK and FK in a table.
 7. **ALTER OPERATIONS**
-    1. Changes schema
-    2. **ADD**
-        1. **Add new column.**
-        2. ALTER TABLE table_name ADD new_col_name datatype ADD new_col_name_2 datatype;
-        3. e.g., ALTER TABLE customer ADD age INT NOT NULL;
-    3. **MODIFY**
-        1. **Change datatype of an attribute.**
-        2. ALTER TABLE table-name MODIFY col-name col-datatype;
-        3. E.g., VARCHAR TO CHAR
-           ALTER TABLE customer MODIFY name CHAR(1024);
-    4. **CHANGE COLUMN**
-        1. **Rename column name.**
-        2. ALTER TABLE table-name CHANGE COLUMN old-col-name new-col-name new-col-datatype;
-        3. e.g., ALTER TABLE customer CHANGE COLUMN name customer-name VARCHAR(1024);
-    5. **DROP COLUMN**
-        1. **Drop a column completely.**
-        2. ALTER TABLE table-name DROP COLUMN col-name;
-        3. e.g., ALTER TABLE customer DROP COLUMN middle-name;
-    6. **RENAME**
-        1. **Rename table name itself.**
-        2. ALTER TABLE table-name RENAME TO new-table-name;
-        3. e.g., ALTER TABLE customer RENAME TO customer-details;
+    1. They change the schema.
+    2. **ADD:** add a new column.
+        1. `ALTER TABLE table_name ADD new_col_name datatype ADD new_col_name_2 datatype;`
+        2. **Example:** `ALTER TABLE customer ADD age INT NOT NULL;`
+    3. **MODIFY:** change the datatype of an attribute.
+        1. `ALTER TABLE table-name MODIFY col-name col-datatype;`
+        2. **Example (VARCHAR to CHAR):** `ALTER TABLE customer MODIFY name CHAR(1024);`
+    4. **CHANGE COLUMN:** rename a column.
+        1. `ALTER TABLE table-name CHANGE COLUMN old-col-name new-col-name new-col-datatype;`
+        2. **Example:** `ALTER TABLE customer CHANGE COLUMN name customer-name VARCHAR(1024);`
+    5. **DROP COLUMN:** drop a column completely.
+        1. `ALTER TABLE table-name DROP COLUMN col-name;`
+        2. **Example:** `ALTER TABLE customer DROP COLUMN middle-name;`
+    6. **RENAME:** rename the table itself.
+        1. `ALTER TABLE table-name RENAME TO new-table-name;`
+        2. **Example:** `ALTER TABLE customer RENAME TO customer-details;`
 
 ## DATA MANIPULATION LANGUAGE (DML)
 
 1. **INSERT**
-    1. INSERT INTO table-name(col1, col2, col3) VALUES (v1, v2, v3), (val1, val2, val3);
+    1. `INSERT INTO table-name(col1, col2, col3) VALUES (v1, v2, v3), (val1, val2, val3);`
 2. **UPDATE**
-    1. UPDATE table-name SET col1 = 1, col2 = 'abc' WHERE id = 1;
-    2. Update multiple rows e.g.,
-        1. UPDATE student SET standard = standard + 1;
+    1. `UPDATE table-name SET col1 = 1, col2 = 'abc' WHERE id = 1;`
+    2. **Update multiple rows:** `UPDATE student SET standard = standard + 1;`
     3. **ON UPDATE CASCADE**
-        1. Can be added to the table while creating constraints. Suppose there is a situation where we have two tables such that primary key of one table is the foreign key for another table. if we update the primary key of the first table then using the ON UPDATE CASCADE foreign key of the second table automatically get updated.
+        1. You can add it to the table while creating constraints.
+        2. Add it while creating constraints. If the PK of one table is the FK of another, updating that PK updates the FK automatically.
 3. **DELETE**
-    1. DELETE FROM table-name WHERE id = 1;
-    2. DELETE FROM table-name; //all rows will be deleted.
-    3. **DELETE CASCADE** - (**to overcome DELETE constraint of Referential constraints**)
-        1. What would happen to child entry if parent table's entry is deleted?
+    1. `DELETE FROM table-name WHERE id = 1;`
+    2. `DELETE FROM table-name;` deletes all rows.
+    3. **DELETE CASCADE:** It overcomes the DELETE constraint of the referential constraints.
+        1. It answers: what happens to the child entry if the parent's entry is deleted?
         2. ```sql
            CREATE TABLE ORDER (
            order_id int PRIMARY KEY,
@@ -255,7 +260,7 @@
            FOREIGN KEY(cust_id) REFERENCES customer(id) ON DELETE CASCADE
            );
            ```
-    3. **ON DELETE NULL** - (**can FK have null values?**)
+    4. **ON DELETE NULL:** It answers "can an FK have null values?"
         1. ```sql
            CREATE TABLE ORDER (
            order_id int PRIMARY KEY,
@@ -265,60 +270,64 @@
            );
            ```
 4. **REPLACE**
-    1. Primarily used for already present tuple in a table.
-    2. As UPDATE, using REPLACE with the help of WHERE clause in PK, then that row will be replaced.
-    3. As INSERT, if there is no duplicate data new tuple will be inserted.
-    4. REPLACE INTO student (id, class) VALUES(4, 3);
-    5. REPLACE INTO table SET col1 = val1, col2 = val2;
+    1. It is primarily used for a tuple already present in a table.
+    2. **As UPDATE:** If you use REPLACE with a WHERE clause on the PK, that row is replaced.
+    3. **As INSERT:** If there is no duplicate data, a new tuple is inserted.
+    4. `REPLACE INTO student (id, class) VALUES(4, 3);`
+    5. `REPLACE INTO table SET col1 = val1, col2 = val2;`
 
 ## JOINING TABLES
 
 ![Join diagrams, top to bottom: inner join, left join, right join, full outer join, cross join](img/lec-09-joins.png)
 
-1. All **RDBMS** are relational in nature, we refer to other tables to get meaningful outcomes.
-2. FK are used to do reference to other table.
+1. All **RDBMS** are relational. We refer to other tables to get meaningful outcomes, using FKs.
 3. **INNER JOIN**
-    1. Returns a resultant table that has matching values from both the tables or all the tables.
-    2. SELECT column-list FROM table1 INNER JOIN table2 ON condition1
+    1. It returns a table with the matching values from both (or all) the tables.
+    2. **Syntax:**
+       ```sql
+       SELECT column-list FROM table1 INNER JOIN table2 ON condition1
        INNER JOIN table3 ON condition2
        ...;
+       ```
     3. **Alias in MySQL (AS)**
-        1. Aliases in MySQL is used to give a temporary name to a table or a column in a table for the purpose of a particular query. It works as a nickname for expressing the tables or column names. It makes the query short and neat.
-        2. SELECT col_name AS alias_name FROM table_name;
-        3. SELECT col_name1, col_name2,... FROM table_name AS alias_name;
+        1. An alias is a temporary nickname for a table or column in one query. It keeps the query short.
+        2. `SELECT col_name AS alias_name FROM table_name;`
+        3. `SELECT col_name1, col_name2,... FROM table_name AS alias_name;`
 4. **OUTER JOIN**
     1. **LEFT JOIN**
-        1. This returns a resulting table that all the data from left table and the matched data from the right table.
-        2. SELECT columns FROM table LEFT JOIN table2 ON Join_Condition;
+        1. It returns all the data from the left table and the matched data from the right table.
+        2. `SELECT columns FROM table LEFT JOIN table2 ON Join_Condition;`
     2. **RIGHT JOIN**
-        1. This returns a resulting table that all the data from right table and the matched data from the left table.
-        2. SELECT columns FROM table RIGHT JOIN table2 ON join_cond;
+        1. It returns all the data from the right table and the matched data from the left table.
+        2. `SELECT columns FROM table RIGHT JOIN table2 ON join_cond;`
     3. **FULL JOIN**
-        1. This returns a resulting table that contains all data when there is a match on left or right table data.
-        2. **Emulated** in MySQL using LEFT and RIGHT JOIN.
+        1. It returns all data when there is a match in the left or right table data.
+        2. It is **emulated** in MySQL using LEFT and RIGHT JOIN.
         3. LEFT JOIN UNION RIGHT JOIN.
-        4. SELECT columns FROM table1 as t1 LEFT JOIN table2 as t2 ON t1.id = t2.id
+        4. ```sql
+           SELECT columns FROM table1 as t1 LEFT JOIN table2 as t2 ON t1.id = t2.id
            UNION
            SELECT columns FROM table1 as t1 RIGHT JOIN table2 as t2 ON t1.id = t2.id;
-        5. UNION ALL, can also be used this will duplicate values as well while UNION gives unique values.
+           ```
+        5. You can also use UNION ALL. It keeps duplicate values, while UNION gives unique values.
 5. **CROSS JOIN**
-    1. This returns all the cartesian products of the data present in both tables. Hence, all possible variations are reflected in the output.
-    2. Used rarely in practical purpose.
-    3. Table-1 has 10 rows and table-2 has 5, then resultant would have 50 rows.
-    4. SELECT column-lists FROM table1 CROSS JOIN table2;
+    1. It returns the cartesian product of both tables, so all possible variations appear.
+    2. It is rarely used.
+    3. **Example:** Table-1 has 10 rows and table-2 has 5, so the result has 50 rows.
+    4. `SELECT column-lists FROM table1 CROSS JOIN table2;`
 6. **SELF JOIN**
-    1. It is used to get the output from a particular table when the same table is joined to itself.
-    2. Used very less.
-    3. Emulated using INNER JOIN.
-    4. SELECT columns FROM table as t1 INNER JOIN table as t2 ON t1.id = t2.id;
-7. **Join without using join keywords.**
-    1. SELECT * FROM table1, table2 WHERE condition;
-    2. e.g., SELECT artist_name, album_name, year_recorded FROM artist, album WHERE artist.id = album.artist_id;
+    1. The same table is joined to itself.
+    2. It is used very little.
+    3. It is emulated using INNER JOIN.
+    4. `SELECT columns FROM table as t1 INNER JOIN table as t2 ON t1.id = t2.id;`
+7. **Join without using join keywords**
+    1. `SELECT * FROM table1, table2 WHERE condition;`
+    2. **Example:** `SELECT artist_name, album_name, year_recorded FROM artist, album WHERE artist.id = album.artist_id;`
 
 ## SET OPERATIONS
 
-1. Used to combine multiple select statements.
-2. Always gives distinct rows.
+1. They combine multiple SELECT statements.
+2. They always give distinct rows.
 
 | JOIN | SET Operations |
 |---|---|
@@ -330,44 +339,50 @@
 | Combines results horizontally. | Combines results vertically. |
 
 3. **UNION**
-    1. Combines two or more SELECT statements.
-    2. SELECT * FROM table1
+    1. It combines two or more SELECT statements.
+    2. ```sql
+       SELECT * FROM table1
        UNION
        SELECT * FROM table2;
-    3. Number of column, order of column must be same for table1 and table2.
+       ```
+    3. The number and order of columns must be the same for table1 and table2.
 4. **INTERSECT**
-    1. Returns common values of the tables.
-    2. Emulated.
-    3. SELECT DISTINCT column-list FROM table-1 INNER JOIN table-2 USING(join_cond);
-    4. SELECT DISTINCT * FROM table1 INNER JOIN table2 ON USING(id);
+    1. It returns common values of the tables.
+    2. It is emulated.
+    3. `SELECT DISTINCT column-list FROM table-1 INNER JOIN table-2 USING(join_cond);`
+    4. `SELECT DISTINCT * FROM table1 INNER JOIN table2 ON USING(id);`
 5. **MINUS**
-    1. This operator returns the distinct row from the first table that does not occur in the second table.
-    2. Emulated.
-    3. SELECT column_list FROM table1 LEFT JOIN table2 ON condition WHERE table2.column_name IS NULL;
-    4. e.g., SELECT id FROM table-1 LEFT JOIN table-2 USING(id) WHERE table-2.id IS NULL;
+    1. It returns the distinct rows from the first table that do not occur in the second table.
+    2. It is emulated.
+    3. `SELECT column_list FROM table1 LEFT JOIN table2 ON condition WHERE table2.column_name IS NULL;`
+    4. **Example:** `SELECT id FROM table-1 LEFT JOIN table-2 USING(id) WHERE table-2.id IS NULL;`
 
 ## SUB QUERIES
 
 ![SQL subquery: parent query containing nested/inner query](img/lec-09-subquery.png)
 
-1. Outer query depends on inner query.
-2. Alternative to joins.
-3. Nested queries.
-4. SELECT column_list (s) FROM table_name WHERE column_name OPERATOR
+1. The outer query depends on the inner query.
+2. Subqueries are an alternative to joins.
+3. They are nested queries.
+4. **Syntax:**
+   ```sql
+   SELECT column_list (s) FROM table_name WHERE column_name OPERATOR
    (SELECT column_list (s) FROM table_name [WHERE]);
-5. e.g., SELECT * FROM table1 WHERE col1 IN (SELECT col1 FROM table1);
-6. Sub queries exist mainly in 3 clauses
+   ```
+5. **Example:** `SELECT * FROM table1 WHERE col1 IN (SELECT col1 FROM table1);`
+6. Subqueries exist mainly in 3 clauses:
     1. Inside a WHERE clause.
     2. Inside a FROM clause.
     3. Inside a SELECT clause.
 7. **Subquery using FROM clause**
-    1. SELECT MAX(rating) FROM (SELECT * FROM movie WHERE country = 'India') as temp;
+    1. `SELECT MAX(rating) FROM (SELECT * FROM movie WHERE country = 'India') as temp;`
 8. **Subquery using SELECT**
-    1. SELECT (SELECT column_list(s) FROM T_name WHERE condition), columnList(s) FROM T2_name WHERE condition;
-9. **Derived Subquery**
-    1. SELECT columnLists(s) FROM (SELECT columnLists(s) FROM table_name WHERE [condition]) as new_table_name;
+    1. `SELECT (SELECT column_list(s) FROM T_name WHERE condition), columnList(s) FROM T2_name WHERE condition;`
+9. **Derived subquery**
+    1. `SELECT columnLists(s) FROM (SELECT columnLists(s) FROM table_name WHERE [condition]) as new_table_name;`
 10. **Co-related sub-queries**
-    1. With a normal nested subquery, the inner SELECT query runs first and executes once, returning values to be used by the main query. A correlated subquery, however, executes once for each candidate row considered by the outer query. In other words, the inner query is driven by the outer query.
+    1. **Normal nested subquery:** The inner SELECT runs once, first, and returns values to the main query.
+    2. **Correlated subquery:** It executes once for each candidate row considered by the outer query. In other words, the outer query drives the inner query.
 
     ```sql
     SELECT column1, column2, ....
@@ -390,12 +405,12 @@
 
 ## MySQL VIEWS
 
-1. A view is a database object that has no values. Its contents are based on the base table. It contains rows and columns similar to the real table.
-2. In MySQL, the View is a **virtual table** created by a query by joining one or more tables. It is operated similarly to the base table but does not contain any data of its own.
-3. The View and table have one main difference that the views are definitions built on top of other tables (or views). If any changes occur in the underlying table, the same changes reflected in the View also.
-4. CREATE VIEW view_name AS SELECT columns FROM tables [WHERE conditions];
-5. ALTER VIEW view_name AS SELECT columns FROM table WHERE conditions;
-6. DROP VIEW IF EXISTS view_name;
-7. CREATE VIEW Trainer AS SELECT c.course_name, c.trainer, t.email FROM courses c, contact t WHERE c.id = t.id; (View using Join clause).
+1. A view is a database object with no values of its own. Its contents come from the base table. It has rows and columns like a real table.
+2. In MySQL, a view is a **virtual table** created by a query over one or more tables. It works like the base table but holds no data.
+3. **View vs table:** Views are definitions built on top of other tables (or views). If the underlying table changes, the same changes show in the view too.
+4. `CREATE VIEW view_name AS SELECT columns FROM tables [WHERE conditions];`
+5. `ALTER VIEW view_name AS SELECT columns FROM table WHERE conditions;`
+6. `DROP VIEW IF EXISTS view_name;`
+7. **View using a join clause:** `CREATE VIEW Trainer AS SELECT c.course_name, c.trainer, t.email FROM courses c, contact t WHERE c.id = t.id;`
 
 NOTE: We can also import/export table schema from files (.csv or json).
