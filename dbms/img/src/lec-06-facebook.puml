@@ -1,0 +1,35 @@
+@startdot
+graph G {
+  bgcolor=white; layout=neato; overlap=false; splines=true; sep="+12";
+  node [fontname="Helvetica", fontsize=12]; edge [fontname="Helvetica", fontsize=11];
+
+  node [shape=box];
+  Profile [label="User Profile"]; Post [label="User Post"]; Comment [label="Post Comment"]; Like [label="Post Like"];
+
+  node [shape=diamond];
+  friend [label="friendship"]; posts; likes; comments; has_c [label="has"]; has_l [label="has"];
+
+  node [shape=ellipse];
+  u_name [label=<<u>user name</u>>]; u_n [label="name"]; u_f [label="first name"]; u_m [label="middle name"]; u_l [label="last name"];
+  u_email [label="email", peripheries=2]; u_pass [label="password"]; u_contact [label="contact number", peripheries=2];
+  u_dob [label="date of birth"]; u_age [label="age", style=dashed];
+  p_id [label=<<u>post id</u>>]; p_content [label="content"]; p_img [label="images", peripheries=2]; p_vid [label="videos", peripheries=2];
+  p_created [label="created time"]; p_mod [label="modified time"];
+  c_id [label=<<u>post comment id</u>>]; c_text [label="text content"]; c_ts [label="time stamp"];
+  l_id [label=<<u>post like id</u>>]; l_ts [label="time stamp"];
+
+  Profile -- {u_name u_n u_email u_pass u_contact u_dob u_age};
+  u_n -- {u_f u_m u_l};
+  Post -- {p_id p_content p_img p_vid p_created p_mod};
+  Comment -- {c_id c_text c_ts};
+  Like -- {l_id l_ts};
+
+  // double line = total participation
+  Profile:n -- friend:w [label="M"]; friend:s -- Profile:e [label="N"];
+  Profile -- posts [label="1"]; posts -- Post [label="N", color="black:invis:black"];
+  Profile -- likes [label="1"]; likes -- Like [label="N", color="black:invis:black"];
+  Profile -- comments [label="1"]; comments -- Comment [label="N", color="black:invis:black"];
+  Post -- has_c [label="1"]; has_c -- Comment [label="N", color="black:invis:black"];
+  Post -- has_l [label="1"]; has_l -- Like [label="N", color="black:invis:black"];
+}
+@enddot

@@ -84,6 +84,8 @@ There are 6 relationships in total.
 | User Post - Has - Post Like | 1:N, total participation on Post Like |
 | User Profile - Likes - Post Like | 1:N, total participation on Post Like |
 
+![Facebook ER diagram in Chen notation](img/lec-06-facebook.svg)
+
 ## Viewer question: Likes as an attribute of User Post
 
 - **Problem:** If Likes were an attribute of User Post, the User Profile - Like relationship could not be established.
