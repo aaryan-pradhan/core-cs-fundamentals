@@ -19,6 +19,12 @@
    3. A table (relation) is the simplest data storage object in a relational DB.
    4. **MySQL** is an open-source RDBMS that uses SQL for all CRUD operations.
 5. **MySQL client-server model:** The client is a CLI or frontend that uses services of the MySQL server.
+
+   ```mermaid
+   flowchart LR
+     C["Client<br/>(CLI or frontend)"] -- "SQL" --> S["MySQL server<br/>(RDBMS)"] --> D[("DB")]
+     S -- "result" --> C
+   ```
 6. **Difference between SQL and MySQL**
    1. SQL is the Structured Query Language used to perform CRUD operations in a relational DB.
    2. MySQL is an RDBMS. It stores, manages and administrates the DB (provided by itself) using SQL.
@@ -81,6 +87,15 @@
       2. **COMMIT:** apply all the changes and end the transaction.
       3. **ROLLBACK:** discard changes and end the transaction.
       4. **SAVEPOINT:** a checkpoint within the group of transactions to roll back to.
+
+   ```mermaid
+   flowchart TB
+     SQL["SQL commands"] --> DDL["DDL<br/>CREATE, ALTER, DROP,<br/>TRUNCATE, RENAME"]
+     SQL --> DRL["DRL / DQL<br/>SELECT"]
+     SQL --> DML["DML<br/>INSERT, UPDATE, DELETE"]
+     SQL --> DCL["DCL<br/>GRANT, REVOKE"]
+     SQL --> TCL["TCL<br/>START TRANSACTION, COMMIT,<br/>ROLLBACK, SAVEPOINT"]
+   ```
 
 ## MANAGING DB (DDL)
 
@@ -158,6 +173,11 @@
        | Can be used with SELECT, UPDATE and DELETE. | Used with SELECT. |
 
        - Both filter rows based on conditions.
+
+       ```mermaid
+       flowchart LR
+         T["Table rows"] --> W["WHERE<br/>filters rows"] --> G["GROUP BY<br/>makes groups"] --> H["HAVING<br/>filters groups"] --> O["Result<br/>(ORDER BY sorts it)"]
+       ```
 
 ## CONSTRAINTS (DDL)
 
@@ -338,6 +358,18 @@
 | The number of column(s) selected may or may not be the same from each table. | The number of column(s) selected must be the same from each table. |
 | Combines results horizontally. | Combines results vertically. |
 
+```mermaid
+flowchart LR
+  subgraph J["JOIN: column wise (horizontal)"]
+    direction LR
+    A1["table1 columns"] --- B1["table2 columns"]
+  end
+  subgraph S["SET operation: row wise (vertical)"]
+    direction TB
+    A2["SELECT 1 rows"] --- B2["SELECT 2 rows<br/>(same number and type of columns)"]
+  end
+```
+
 3. **UNION**
     1. It combines two or more SELECT statements.
     2. ```sql
@@ -384,6 +416,19 @@
     1. **Normal nested subquery:** The inner SELECT runs once, first, and returns values to the main query.
     2. **Correlated subquery:** It executes once for each candidate row considered by the outer query. In other words, the outer query drives the inner query.
 
+    ```mermaid
+    flowchart LR
+      subgraph N["Normal nested subquery"]
+        direction LR
+        I1["Inner SELECT<br/>runs once, first"] -- "values" --> O1["Outer query"]
+      end
+      subgraph C["Correlated subquery"]
+        direction LR
+        O2["Outer query<br/>each candidate row"] -- "outer.expr2" --> I2["Inner SELECT<br/>runs once per row"]
+        I2 -- "result" --> O2
+      end
+    ```
+
     ```sql
     SELECT column1, column2, ....
     FROM table1 as outer
@@ -408,6 +453,13 @@
 1. A view is a database object with no values of its own. Its contents come from the base table. It has rows and columns like a real table.
 2. In MySQL, a view is a **virtual table** created by a query over one or more tables. It works like the base table but holds no data.
 3. **View vs table:** Views are definitions built on top of other tables (or views). If the underlying table changes, the same changes show in the view too.
+
+   ```mermaid
+   flowchart LR
+     T1[("courses")] --> V["View Trainer<br/>(virtual table, no data of its own,<br/>defined by a query)"]
+     T2[("contact")] --> V
+     V --> U["User reads it<br/>like a table"]
+   ```
 4. `CREATE VIEW view_name AS SELECT columns FROM tables [WHERE conditions];`
 5. `ALTER VIEW view_name AS SELECT columns FROM table WHERE conditions;`
 6. `DROP VIEW IF EXISTS view_name;`
