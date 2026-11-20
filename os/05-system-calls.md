@@ -1,58 +1,63 @@
 # Lecture 5: System Calls
 
-**How do apps interact with Kernel?** -> using system calls.
+**How do apps interact with the kernel?** Using system calls.
 
-- The OS has two separate spaces: user space (apps run here) and kernel space (core work happens here). Only the kernel has privileged access to hardware.
-- An app that wants memory, CPU cycles or any hardware work must go to the kernel. Since user space and kernel space are separate, the OS gives a mechanism for them to communicate: system calls.
-- Eg. `malloc`: the program needs some memory space, so it must switch from user mode to kernel mode; the system call makes that switch possible.
-- Interview answer: "How do apps interact with kernel?" -> "System calls." Then expect to be asked for an example (the `mkdir` one below).
+- **Two spaces:** User space is where apps run. Kernel space is where the core work happens. Only the kernel has privileged access to hardware.
+- **Why system calls:** An app that wants memory, CPU cycles or any hardware work must go to the kernel. The two spaces are separate, so the system call is the mechanism to communicate.
+- **Example (`malloc`):** The program needs memory, so it must switch from user mode to kernel mode. The system call makes that switch possible.
 
-Eg. Mkdir laks
+> **Interview:** "How do apps interact with the kernel?" Answer: "System calls." Then expect to be asked for an example. Use the `mkdir` one below.
 
-- Mkdir indirectly calls kernel and asked the file mgmt. module to create a new directory.
-- Mkdir is just a wrapper of actual system calls.
-- Mkdir interacts with kernel using system calls.
-- Two ways to create a folder (eg. a "movies" folder):
-  - GUI: right click -> New Folder, type the name. For standard users.
-  - CLI: open a terminal and run `mkdir movies`.
-  - Both do the same job: the GUI's New Folder button internally calls `mkdir` itself. The GUI only makes it look easy.
-- What happens on `mkdir movies`:
-  1. The command goes from user space to the **System Call Interface (SCI)**.
-  2. The SCI is the entry point to kernel space. It finds the implementation corresponding to `mkdir` inside the kernel.
-  3. Kernel space runs that implementation.
-  4. The implementation goes to the current directory in the file system tree and adds a node named `movies` (eg. under root if run at root).
-  5. Control returns to user space; the GUI now shows a folder named `movies`.
+## Example: `mkdir laks`
 
-Eg. Creating a process.
+- **Indirect call:** `mkdir` asks the kernel's file management module to create a new directory.
+- **Wrapper:** `mkdir` is just a wrapper of actual system calls. It interacts with the kernel using them.
+- **Two ways to create a folder** (for example a "movies" folder):
+  - **GUI:** Right-click, choose New Folder, then type the name. It is for standard users.
+  - **CLI:** Open a terminal and run `mkdir movies`.
+  - **Same job:** The GUI's New Folder button internally calls `mkdir`. The GUI only makes it look easy.
 
-- User executes a process. (User space)
-- Gets system call. (US)
-- Exec system call to create a process. (KS)
-- Return to US.
-- In detail (eg. running a compiled `hello world` executable):
-  1. On run, it looks for the execution system call, which the SCI provides.
-  2. The SCI switches to kernel mode.
-  3. In kernel mode, process management creates the process: allocates memory for it in RAM, and the kernel also does any other work it needs (accessing hardware / I/O devices).
-  4. Once the process is created, the kernel's work is over, so we switch back from kernel mode to user mode.
-  5. The process info is given to user space; the process now shows in Task Manager / Activity Monitor, or its GUI appears.
-- This user mode <-> kernel mode switching keeps happening internally for everything you run.
+What happens on `mkdir movies`:
 
-**Transitions from US to KS done by software interrupts.**
+1. The command goes from user space to the **System Call Interface (SCI)**.
+2. The SCI is the entry point to kernel space. It finds the implementation corresponding to `mkdir` inside the kernel.
+3. Kernel space runs that implementation.
+4. The implementation adds a node named `movies` in the current directory of the file system tree, for example under root.
+5. Control returns to user space. The GUI now shows a folder named `movies`.
 
-- Software interrupt: tells the CPU to pause the current work for a moment and quickly do this important work first.
-- Software interrupts are used to switch from user mode to kernel mode and from kernel mode back to user mode.
+## Example: creating a process
 
-**System calls** are implemented in C.
+- **Short form:** The user executes a process (user space). It gets a system call (user space). The exec system call creates the process (kernel space). Control returns to user space.
 
-- Actually a lower-level kind of C than normal application C, one that can access and work with hardware directly.
-- What you see (`mkdir`) is only the top layer. Inside, multiple processes / a lot of code may run to do the job. The system call you see is simply an interface to that C implementation.
+In detail, for a compiled `hello world` executable:
 
-A **system call** is a mechanism using which a user program can request a service from the kernel for which it does not have the permission to perform.
-User programs typically do not have permission to perform operations like accessing I/O devices and communicating other programs.
+1. On run, it looks for the execution system call, which the SCI provides.
+2. The SCI switches to kernel mode.
+3. In kernel mode, process management creates the process and allocates memory for it in RAM. The kernel also does any other work needed, such as accessing hardware or I/O devices.
+4. Once the process is created, the OS switches back to user mode.
+5. The process info is given to user space. The process now shows in Task Manager or Activity Monitor, or its GUI appears.
 
-- User mode has very limited access. Any work it cannot do itself is done by switching to kernel mode, and the mechanism for switching is the system call.
+- **Constant switching:** This user mode and kernel mode switching happens for everything you run.
 
-**System Calls** are the only way through which a process can go into **kernel mode from user mode.**
+## Software interrupts
+
+Transitions from user space to kernel space are done by software interrupts.
+
+- **Meaning:** A software interrupt tells the CPU to pause the current work and do this important work first.
+- **Use:** It switches from user mode to kernel mode, and back.
+
+## What a system call is
+
+System calls are implemented in C.
+
+- **Low-level C:** It is lower-level than normal application C and can work with hardware directly.
+- **Top layer:** What you see (`mkdir`) is only the top layer. Inside, multiple processes and a lot of code may run. The system call is simply an interface to that C implementation.
+
+A **system call** is a mechanism by which a user program can request a service from the kernel that it does not have permission to perform. User programs typically do not have permission to perform operations like accessing I/O devices and communicating with other programs.
+
+- **Limited user mode:** User mode has very limited access. Work it cannot do is done by switching to kernel mode, through the system call.
+
+System calls are the only way a process can go into **kernel mode from user mode**.
 
 ```
                     +---------------------------------+
@@ -70,18 +75,20 @@ Software Interrupt ------------------------------------------------
                     +---------------------------------+
 ```
 
-- Flow of a system call through the diagram (eg. `mkdir movies`):
-  1. User app calls the library. In a normal Linux system this is glibc, a C (not C++) library used to call the SCI. We are still in user mode.
-  2. A software interrupt is raised: move from user mode to kernel mode.
-  3. In kernel mode the SCI is called. It looks up where the C implementation corresponding to `mkdir` is mapped in the kernel.
-  4. The kernel runs that implementation.
-  5. The work happens on the hardware: eg. the directory is created on the disk.
-  6. Control retraces back up, and user mode gets the info that the `movies` folder is created.
-- This diagram can be drawn in an interview to explain quickly.
+Flow of a system call through the diagram, for `mkdir movies`:
 
-## Types of System Calls:
+1. **User app:** It calls the library. On Linux this is glibc, a C (not C++) library used to call the SCI. This is still user mode.
+2. **Interrupt:** A software interrupt is raised. It moves from user mode to kernel mode.
+3. **SCI:** In kernel mode the SCI is called. It looks up where the C implementation for `mkdir` is mapped in the kernel.
+4. **Kernel:** The kernel runs that implementation.
+5. **Hardware:** The work happens on the hardware. For example, the directory is created on the disk.
+6. **Return:** Control retraces back up. User mode learns that the `movies` folder is created.
 
-1) Process Control (also called process management): system calls for creating, deleting, waiting for and terminating a process, allocating/freeing its memory, getting/setting its attributes.
+> **Interview:** Draw this diagram in an interview to explain quickly.
+
+## Types of System Calls
+
+1. **Process Control** (also called process management): System calls for creating, deleting, waiting for and terminating a process. They also allocate and free its memory, and get and set its attributes.
    - a. end, abort
    - b. load, execute
    - c. create process, terminate process
@@ -90,34 +97,34 @@ Software Interrupt ------------------------------------------------
    - f. wait event, signal event
    - g. allocate and free memory
 
-2) File Management
+2. **File Management:**
    - a. create file, delete file
    - b. open, close
    - c. read, write, reposition
-     - Reposition: start reading from a chosen position instead of position 0, eg. from the 20th character.
+     - **Reposition:** Start reading from a chosen position instead of position 0. For example, start from the 20th character.
    - d. get file attributes, set file attributes
-     - Eg. security / permissions: a file `laks.txt` may be accessible only to user `laksh`; another user `ram` gets no access. Setting such attributes stops other users from modifying, deleting or creating it.
+     - **Example:** Security and permissions. A file `laks.txt` may be accessible only to user `laksh`. User `ram` gets no access. Such attributes stop other users from modifying, deleting or creating it.
 
-3) Device Management: read/write a device, get/set its attributes, attach/detach it.
+3. **Device Management:** Read and write a device, get and set its attributes, attach and detach it.
    - a. request device, release device
    - b. read, write, reposition
    - c. get device attributes, set device attributes
    - d. logically attach or detach devices
 
-4) Information maintenance: info of different processes, devices, the date & time, and system data; used to get/set these.
+4. **Information maintenance:** These calls get and set info about different processes, devices, the date and time, and system data.
    - a. get time or date, set time or date
    - b. get system data, set system data
    - c. get process, file, or device attributes
    - d. set process, file, or device attributes
 
-5) Communication Management: used for IPC (inter-process communication), ie. two processes running in separate spaces that need to communicate.
-   - Eg. process A and process B need a pipe between them to communicate. Creating, maintaining and deleting the pipe is communication management.
+5. **Communication Management:** These calls are used for IPC (inter-process communication). Two processes running in separate spaces need to communicate.
+   - **Example:** Processes A and B need a pipe between them. Creating, maintaining and deleting the pipe is communication management.
    - a. create, delete communication connection
    - b. send, receive messages
    - c. transfer status information
    - d. attach or detach remote devices
 
-## Examples of Windows & Unix System calls:
+## Examples of Windows and Unix System calls
 
 | Category | Windows | Unix |
 |---|---|---|
@@ -141,26 +148,28 @@ Software Interrupt ------------------------------------------------
 |  | CreateFileMapping() | shmget () |
 |  | MapViewOfFile() | mmap() |
 
-- `fork()`: creates a process, always as a child of an existing process.
-  - When the computer boots, one root process starts first (call it process 0). Every process created after it is, in a way, its child.
-  - Eg. you open a terminal and run an executable inside it: the terminal is the parent process, the executable is the child process.
-  - So no process in the computer is created fresh; all are children of one another.
-- `exit()`: exits the process: deallocates its memory etc., and marks in the task table that the process has exited.
-- `chmod()`: sets the file's mode, ie. permissions: readable, writable, read-only, read-write.
-- `chown()`: change ownership (ch = change, own = ownership). Eg. making a file accessible only by user `laksh`.
-- `ioctl()`: used for device control, eg. setting the console mode.
-- Information management also includes `date`: running `date` in a terminal shows the date and time.
-- `pipe()`: sets up a pipe between process A and process B.
-- IPC has two methods:
-  - Message passing: done through `pipe()`.
-  - Shared memory: done through `shmget()`, which gets the shared memory through which process A and process B communicate.
-- `mmap()`: maps and unmaps a device (or file) into memory, including virtual memory. Covered later.
-- In interviews nobody asks you to name all system calls. Know one or two names; mainly know what a system call is and how it works. Look up each call in the table once to get intuition.
+- **`fork()`:** It creates a process, always as a child of an existing process.
+  - **Root process:** At boot, one root process (call it process 0) starts first. Every later process is, in a way, its child.
+  - **Example:** You run an executable inside a terminal. The terminal is the parent. The executable is the child.
+  - **Result:** All processes are children of one another.
+- **`exit()`:** It exits the process, deallocates its memory and so on, and marks in the task table that it has exited.
+- **`chmod()`:** It sets the file's mode, meaning its permissions: readable, writable, read-only or read-write.
+- **`chown()`:** It changes ownership. Here "ch" means change and "own" means ownership. Example: making a file accessible only by user `laksh`.
+- **`ioctl()`:** It is used for device control, for example setting the console mode.
+- **`date`:** Information management also includes `date`. Running `date` in a terminal shows the date and time.
+- **`pipe()`:** It sets up a pipe between process A and process B.
+- **IPC methods:** IPC has two methods.
+  - **Message passing:** It is done through `pipe()`.
+  - **Shared memory:** It is done through `shmget()`. This gets the shared memory through which process A and process B communicate.
+- **`mmap()`:** It maps and unmaps a device (or file) into memory, including virtual memory. It is covered later.
+
+> **Interview:** Nobody asks you to name all system calls. Know one or two. Mainly know what a system call is and how it works. Look up each call in the table once.
 
 ### Demo: system calls while writing and running a script
 
-1. Open a terminal, `cd` to Desktop, run `vim hello.sh`. Until saved, the document exists only in memory.
-2. Write a bash script that prints in a loop:
+1. **Open the editor:** In a terminal, `cd` to Desktop and run `vim hello.sh`. Until saved, the document exists only in memory.
+
+2. **Write the script:** Write a bash script that prints in a loop.
 
    ```bash
    #!/bin/bash
@@ -171,11 +180,17 @@ Software Interrupt ------------------------------------------------
    done
    ```
 
-3. Save with `:wq`. File management system calls: `open()` creates a file descriptor, then `write()` creates the file in the Desktop folder of the file system tree and saves the content.
-4. Run `bash hello.sh`. Process management system calls: `fork()` creates a child of the terminal process, named `hello.sh`.
-5. Check with `ps -a` (from another terminal): the process is listed with its PID. Building that table uses information management system calls, eg. `getpid()` fetches the PID.
-6. `ps -a` also shows a PPID (parent's PID): the parent is the terminal, which proves `fork()` made it a child.
-7. Kill it: `kill -9 <pid>` (eg. `kill -9 19354`). `-9` kills forcefully.
-   - `kill` is also a system call: it goes from user mode to kernel mode, the kernel finds the running PID, tells the CPU to stop working on it, and removes the process from memory.
-8. `man kill` shows its manual: kill terminates or signals a process. Signals include 2 = interrupt, 3 = quit, 9 = kill, abort, alarm clock, etc. Use `man <command>` to read about any of the calls above.
-- File management, then process management, then information management system calls all worked together in this one example.
+3. **Save:** Save with `:wq`. These are file management system calls. `open()` creates a file descriptor. `write()` creates the file in the Desktop folder of the file system tree and saves the content.
+
+4. **Run:** Run `bash hello.sh`. These are process management system calls. `fork()` creates a child of the terminal process, named `hello.sh`.
+
+5. **Check:** Run `ps -a` from another terminal. The process is listed with its PID. Building that table uses information management system calls. For example, `getpid()` fetches the PID.
+
+6. **Parent:** `ps -a` also shows a PPID (the parent's PID), which is the terminal. This proves `fork()` made it a child.
+
+7. **Kill:** Run `kill -9 <pid>`, for example `kill -9 19354`. The `-9` kills forcefully.
+   - **System call:** `kill` is also a system call. It goes to kernel mode. The kernel finds the running PID, tells the CPU to stop it and removes the process from memory.
+
+8. **Manual:** `man kill` shows that kill terminates or signals a process. Signals include 2 = interrupt, 3 = quit, 9 = kill, abort, alarm clock and others. Use `man <command>` to read about any of the calls above.
+
+- **Summary:** File, process and information management system calls all worked together in this one example.
