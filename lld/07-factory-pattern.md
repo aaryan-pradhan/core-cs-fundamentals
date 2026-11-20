@@ -1,22 +1,26 @@
 # Lecture 7: Design Patterns and the Factory Pattern
 
 1. **What is a design pattern?**
-   1. A design pattern is a tried and tested solution to a problem that keeps coming up in software design. It is a recipe, not a library: you adapt it to your own classes.
-   2. Every pattern in these notes is built from the same tools: interfaces, virtual functions, and pointers to a base class (lecture 3), arranged so that the SOLID principles (lecture 6) hold.
+   1. A design pattern is a tried and tested solution to a problem that keeps coming up in software design.
+   2. **Recipe, not library:** You adapt it to your own classes.
+   3. **Same tools:** Every pattern in these notes uses interfaces, virtual functions, and pointers to a base class (lecture 3). They are arranged so that the SOLID principles (lecture 6) hold.
 2. **Three groups of patterns**
-   1. **Creational patterns** provide object creation mechanisms that increase flexibility and reuse of existing code. They answer "who creates the object, and how?"
-      1. Factory pattern (this lecture)
-      2. Singleton pattern (lecture 8)
-   2. **Behavioral patterns** take care of effective communication and the assignment of responsibilities between objects. They answer "who does what, and how can that be swapped?"
-      1. Strategy pattern (lecture 9)
-   3. **Structural patterns** help connect different pieces together to form a larger structure. They answer "how are objects composed?"
-      1. Decorator pattern (lecture 10)
+
+   | Group | What it does | Question it answers | Patterns |
+   |-------|--------------|---------------------|----------|
+   | **Creational** | Provides object creation mechanisms that increase flexibility and reuse of existing code | "Who creates the object, and how?" | Factory (lecture 7), Singleton (lecture 8) |
+   | **Behavioral** | Takes care of effective communication and the assignment of responsibilities between objects | "Who does what, and how can that be swapped?" | Strategy (lecture 9) |
+   | **Structural** | Helps connect different pieces together to form a larger structure | "How are objects composed?" | Decorator (lecture 10) |
+
 3. **Factory pattern: definition**
-   1. Create objects without specifying the exact class of the object that will be created.
-      1. The type of object is determined at **runtime**, for example from user input.
-      2. You need a pointer or reference to a base class. Without polymorphism, the factory pattern can't be implemented.
-   2. It provides an interface for creating objects in a superclass, but allows subclasses to alter the type of objects that will be created.
-   3. The problem it solves: if `main` writes `new Square()` directly, `main` depends on `Square`. Every new shape means editing every place that creates shapes. A factory moves all the `new` calls into one class. The client only ever sees the interface.
+   1. It creates objects without specifying the exact class of the object that will be created.
+      - **Runtime:** The type of object is determined at **runtime**, for example from user input.
+      - **Base pointer:** You need a pointer or reference to a base class. Without polymorphism, the factory pattern cannot be implemented.
+   2. It provides an interface for creating objects in a superclass. Subclasses can alter the type of objects that will be created.
+   3. **Problem it solves:**
+      - If `main` writes `new Square()` directly, `main` depends on `Square`.
+      - Every new shape means editing every place that creates shapes.
+      - A factory moves all the `new` calls into one class. The client only ever sees the interface.
 4. **Example: a shape factory**
 
    ```cpp
@@ -65,21 +69,23 @@
    }
    ```
 
-   1. The shape that gets drawn depends on the runtime input `shape_name`. `main` never names `Square`, `Circle` or `Rectangle`.
-   2. Adding a `Triangle` means one new class and one new `if` in the factory. No client code changes.
+   1. **Runtime input:** The shape that gets drawn depends on the input `shape_name`. `main` never names `Square`, `Circle` or `Rectangle`.
+   2. **Adding a shape:** A `Triangle` needs one new class and one new `if` in the factory. No client code changes.
 5. **How it follows SOLID**
-   1. **S**: each class has one responsibility. Shapes draw themselves, and the factory only creates them.
-   2. **O**: new shapes extend the system as new classes. The existing shapes are never modified.
-   3. **L**: every shape can stand in wherever a `ShapeInterface*` is expected.
-   4. **I**: the interface is very small (just `Draw`), so there is no need to segregate it.
-   5. **D**: maintained through the interface. The client depends on `ShapeInterface`, not on concrete shapes.
-6. **Rule of thumb**: whenever two classes are of the same type (both are shapes, both are payment methods), make a new abstract class above them. Both inherit from it, and the rest of the code talks to the abstract class.
+   1. **S:** Each class has one responsibility. Shapes draw themselves, and the factory only creates them.
+   2. **O:** New shapes extend the system as new classes. The existing shapes are never modified.
+   3. **L:** Every shape can stand in wherever a `ShapeInterface*` is expected.
+   4. **I:** The interface is very small (just `Draw`), so there is no need to segregate it.
+   5. **D:** It is maintained through the interface. The client depends on `ShapeInterface`, not on concrete shapes.
+6. **Rule of thumb:** Whenever two classes are of the same type (both are shapes, both are payment methods), make a new abstract class above them. Both inherit from it. The rest of the code talks to the abstract class.
 7. **When is the factory pattern useful?**
-   1. When a class has multiple subclasses, each providing a different implementation.
-   2. When we have to decouple the client code from the concrete classes.
-   3. When we need to extend the application by adding new types of objects without modifying existing code.
+   1. A class has multiple subclasses, each providing a different implementation.
+   2. You have to decouple the client code from the concrete classes.
+   3. You need to extend the application with new types of objects without modifying existing code.
 8. **Bigger version: a family of factories**
-   1. The factory itself can be an interface too. A `TwoDShapeFactory` makes 2D shapes, and a `ThreeDShapeFactory` makes 3D shapes. The client picks a factory, then asks it for shapes, and never knows which concrete classes it gets.
+   1. The factory itself can be an interface too.
+   2. A `TwoDShapeFactory` makes 2D shapes. A `ThreeDShapeFactory` makes 3D shapes.
+   3. The client picks a factory, then asks it for shapes. It never knows which concrete classes it gets.
 
    ```mermaid
    classDiagram
@@ -163,10 +169,10 @@
    ```
 
 9. **Pros and cons**
-   1. Pros:
-      1. Avoids tight coupling between the creator and the concrete products. They are connected only through the interface and the factory.
-      2. Single Responsibility Principle: product creation code lives in one place in the program, which makes it easier to support.
-      3. Open/Closed Principle: new types of products can be introduced without breaking existing client code.
-   2. Cons:
-      1. The code may become more complicated, since the pattern introduces a lot of new subclasses. It fits best when a class hierarchy already exists.
-10. Next: the factory controls *which* class gets created. Sometimes we need to control *how many* objects get created, exactly one. That is the Singleton pattern.
+   1. **Pros:**
+      1. **Loose coupling:** The creator and the concrete products are connected only through the interface and the factory.
+      2. **Single Responsibility Principle:** Product creation code lives in one place in the program. This makes it easier to support.
+      3. **Open/Closed Principle:** New types of products can be introduced without breaking existing client code.
+   2. **Cons:**
+      1. **More complexity:** The pattern introduces a lot of new subclasses. It fits best when a class hierarchy already exists.
+10. **Next:** The factory controls *which* class gets created. Sometimes we need to control *how many* objects get created, exactly one. That is the Singleton pattern.
