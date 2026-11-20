@@ -7,6 +7,11 @@
       - Step 1: build the ER model (ER diagram).
       - Step 2: convert the ER model into the relational model.
       - Step 3: an RDBMS implements the relational model (`CREATE TABLE` etc.).
+
+      ```mermaid
+      flowchart LR
+        A["Step 1<br/>ER model<br/>(ER diagram)"] --> B["Step 2<br/>Relational model<br/>(tables)"] --> C["Step 3<br/>RDBMS<br/>(CREATE TABLE)"]
+      ```
    4. **Conversion from ER to RM:** Each entity becomes a table. Each attribute becomes a column. Multivalued and composite attributes, and relationships, come in the next lecture.
    5. **Example:** Entity Customer (cust_id, name, address, contact_no) becomes table Customer with those 4 columns.
 
@@ -36,6 +41,15 @@
 10. **Relational key:** A set of attributes that can uniquely identify each tuple.
     1. It applies to a table and a relation alike.
 
+    ```mermaid
+    flowchart TB
+      S["Relation schema<br/>Customer(cust_id, name, address, contact_no)"]
+      S --> COL["Columns = attributes<br/>4 columns, so degree = 4"]
+      S --> ROW["Rows = tuples<br/>(1, Lakshya, ...) and (2, Raj, ...)<br/>2 rows, so cardinality = 2"]
+      COL --> DOM["Each column has a domain<br/>(permitted values)"]
+      ROW --> KEY["Relational key<br/>uniquely identifies each tuple"]
+    ```
+
 ## 11. Properties of a table in the relational model
 
 | # | Property | Detail |
@@ -63,6 +77,22 @@
 4. **Alternate Key (AK):**
    1. All CKs except the PK.
    2. AK = set of CKs minus PK.
+
+   ```mermaid
+   flowchart TB
+     subgraph SK["Super keys: any attribute set that identifies a tuple"]
+       X1["{cust_id, name, contact, email}"]
+       subgraph CK["Candidate keys: minimal, no redundant attribute, never NULL"]
+         subgraph PKS["Primary key: one CK, the shortest"]
+           P["{cust_id}"]
+         end
+         subgraph AK["Alternate keys: CKs minus PK"]
+           A1["{contact}"]
+           A2["{email}"]
+         end
+       end
+     end
+   ```
 5. **Foreign Key (FK):**
    1. It creates a relation between two tables.
    2. A relation r1 may include among its attributes the PK of another relation r2. This attribute is called an FK from r1 referencing r2.
@@ -74,6 +104,23 @@
    8. **Cross reference:** To find who placed order 21, take its FK value (1) and read customer 1 in the Customer table.
    9. The ER relationship diamond becomes the FK inside the Order table.
    10. **Naming:** Order (holds the FK) is the child (referencing) relation. Customer (its PK is used) is the parent (referenced) relation.
+
+   ```mermaid
+   erDiagram
+       Customer ||--o{ Order : "places (cust_id)"
+       Customer {
+           int cust_id PK "parent, referenced"
+           string name
+           string address
+           string contact_no
+       }
+       Order {
+           int order_id PK
+           int cust_id FK "child, referencing"
+           datetime timestamp
+           date delivery_date
+       }
+   ```
 6. **Composite Key:** A PK formed using at least 2 attributes.
 7. **Compound Key:** A PK formed using 2 FKs.
    1. **Example:** Two schools A and B each keep their own registration numbers (A: 101, 102, 103; B: B101, B102 and so on). The tables are independent. When merging them into one table, the registration number alone cannot be the PK.
@@ -82,6 +129,13 @@
    2. The DB generates it automatically, usually as an integer.
    3. It may be used as the PK.
    4. In the merged school table, the DB gives each tuple a self-generated integer (1, 2, 3, 4, 5 ...), auto-incremented by 1. It identifies each tuple uniquely and is used as the PK.
+
+   ```mermaid
+   flowchart LR
+     A["School A<br/>reg no: 101, 102, 103"] --> M
+     B["School B<br/>reg no: B101, B102"] --> M
+     M["Merged table<br/>reg no alone is not a safe PK"] --> S["Add surrogate key<br/>1, 2, 3, 4, 5 (auto-increment)<br/>used as PK"]
+   ```
 
 ## 13. Integrity constraints
 
@@ -120,6 +174,16 @@
       - The delete constraint is not violated.
       - So an FK is NULL when the parent tuple it referred to has gone from the system.
       > **Interview:** Explain this fully to the interviewer.
+
+      ```mermaid
+      flowchart TB
+        I["Insert order 24 with cust_id 4"] --> I1{"cust_id 4 in Customer?"}
+        I1 -- No --> I2["Rejected: foreign key<br/>constraint violation"]
+        D["Delete customer 3<br/>(order 23 refers to it)"] --> R{"FK rule on Order"}
+        R -- "no rule" --> R1["Delete rejected"]
+        R -- "ON DELETE CASCADE" --> R2["Customer 3 and order 23<br/>both deleted"]
+        R -- "ON DELETE SET NULL" --> R3["Customer 3 deleted<br/>order 23 stays, cust_id = NULL"]
+      ```
 6. **Key constraints:** The DBMS has six types of key constraints.
    1. **NOT NULL:** It stops the user from leaving a value NULL. Every element in the database has a value.
       - Key constraints are applied when `CREATE TABLE` is called, that is, when the relation is defined. A column can be NULL by default.
