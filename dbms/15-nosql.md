@@ -124,7 +124,7 @@ Scaling horizontally is achieved through **sharding** or **replica sets**.
 
 ```mermaid
 flowchart LR
-  Q["Read Aadhaar data"] -.-x S1["Server 1 (copy)<br/>down"]
+  Q["Read Aadhaar data"] -. "fails" .-> S1["Server 1 (copy)<br/>down"]
   Q --> S3["Server 3 (copy)<br/>serves the read"]
 ```
 
