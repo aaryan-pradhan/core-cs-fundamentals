@@ -21,7 +21,7 @@
 ```mermaid
 flowchart LR
   Q["Query: roll no. 843"] --> I["Index file (small, sorted)<br/>1000 entries: 1, 11, 21, ..., 841, ...<br/>binary search"]
-  I -- "block pointer" --> B["Data file on disk<br/>block 85 holds 841 to 850"]
+  I -- "block pointer" --> B["Data file on disk<br/>block 841 holds 841 to 850"]
   B -- "search inside block" --> R["Record 843"]
 ```
 
