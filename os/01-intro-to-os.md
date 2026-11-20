@@ -2,71 +2,79 @@
 
 UNIT 1
 
-**Application software** performs specific task for the user.
+**Application software** does a specific task for the user.
 
-**System software** operates and controls the computer system and provides a platform to run application software.
+**System software** runs and controls the computer. It gives application software a platform to run on.
 
-An **operating system** is a piece of software that manages all the resources of a computer system, both hardware and software, and provides an environment in which the user can execute his/her programs in a convenient and efficient manner by hiding underlying complexity of the hardware and acting as a resource manager.
+An **operating system (OS)** is a piece of software.
 
-- **Just software:** the OS is a program, like the apps you write.
-- **Resources:** the OS manages both hardware and software resources.
-- **Convenient and efficient:** you never worry about how memory gets allocated. You can run many programs side by side. No app can hijack the system.
+- It manages all the resources of a computer, both hardware and software.
+- It gives the user an easy and efficient place to run programs.
+- It does this in two ways:
+  1. It hides the complexity of the hardware.
+  2. It acts as a resource manager.
 
 > **Interview:** An OS does two things. It hides hardware complexity, and it manages resources.
 
+- **Just software:** The OS is a program, like the apps you write.
+- **Easy and efficient:** You never worry about how memory gets allocated. You can run many programs at once. No app can take over the system.
+
 ## Why OS?
 
-Picture a minimal computer with no OS. It has a CPU, memory, a GPU, and a disk.
+Picture a simple computer with no OS. It has a CPU, memory, a GPU, and a disk.
 
 1. What if there is no OS?
 
-   a. Bulky and complex app. (Hardware interaction code must be in app's code base)
-      - **Repeated code:** each app writes its own hardware and memory management code. TikTok and PUBG both carry the same code.
-      - **Breaks DRY:** apps become bulky and messy. DRY means "Do not Repeat Yourself": write a function once (e.g. a prime check) and call it everywhere.
-      - **With an OS:** memory management, scheduling and process management live once, in the OS. An app developer (e.g. of a weather app) writes only the app's own logic.
+   a. Apps become bulky and complex. Each app must contain its own hardware code.
+      - **Repeated code:** TikTok and PUBG both write the same memory management code.
+      - **Breaks DRY:** DRY means "Do not Repeat Yourself". You write a function once, like a prime check, and call it everywhere.
+      - **With an OS:** Memory management, scheduling and process management live once, in the OS. An app developer writes only the app's own logic.
 
-   b. Resource exploitation by 1 App.
+   b. One app can grab all the resources.
       - **Hijacking:** TikTok opens and takes all the CPU, memory and GPU.
-      - **Result:** PUBG hangs and cannot start, even though the machine has enough for both.
-      - **With an OS:** the OS sits between apps and hardware. It gives each app only a share, so both run together:
+      - **Result:** PUBG hangs and cannot start. This happens even though the machine has enough for both.
+      - **With an OS:** The OS sits between the apps and the hardware. It gives each app only a share. So both apps run together.
 
         | App | CPU | Memory | GPU |
         |-----|-----|--------|-----|
         | TikTok | 5% | 10% | 12% |
         | PUBG (heavier) | 50% | 60% | 60% |
 
-      - **Resource management:** this sharing out is the first job of an OS.
+      - **Resource management:** This sharing out is the first job of an OS.
 
-   c. No memory protection.
-      - **No isolation:** memory is split into blocks. Nothing keeps one app's blocks apart from another's.
-      - **Isolation:** the two apps' memory is logically separate. TikTok should not even know PUBG exists.
-      - **The danger:** TikTok could overwrite PUBG's player health from 100% to 0%. PUBG then kills the player. A buggy or malicious app can corrupt another app.
-      - **With an OS:** the OS records which range each app owns. Each app stays inside its range and cannot see the other. This is **memory protection and isolation**.
+   c. There is no memory protection.
+      - **No isolation:** Memory is split into blocks. Nothing keeps one app's blocks apart from another's.
+      - **Isolation:** Each app's memory is kept separate. TikTok should not even know PUBG exists.
+      - **The danger:** TikTok could change PUBG's player health from 100% to 0%. Then PUBG kills the player. A buggy or harmful app can break another app.
+      - **With an OS:** The OS records which memory range each app owns. Each app stays inside its own range. It cannot see the other app. This is **memory protection and isolation**.
 
         ```
         Memory:  [ TikTok: 0 .. X ][ PUBG: X .. Y ]
                   OS enforces the bounds. Neither app sees the other.
         ```
 
-2. What is an OS made up of?
+2. What is an OS made of?
 
-   a. Collection of system software.
+   a. An OS is a collection of system software.
 
-## An operating system function -
+## Functions of an operating system
 
-- Access to the computer hardware.
-  - **Only the OS:** user apps have no direct access to the hardware. Every program goes through the OS.
-- interface between the user and the computer hardware
-  - **Interface:** the OS sits between the user (apps like TikTok, PUBG) and the hardware.
-  - **Analogy:** a bank clerk. You give the clerk a slip, the clerk fetches cash from the vault. You are the app, the clerk is the OS, the vault is the hardware.
-- **Resource management (Aka, Arbitration) (memory, device, file, security, process etc)**
+1. **It controls access to the hardware.**
+   - User apps cannot touch the hardware directly.
+   - Every program must go through the OS.
 
-  > **Interview:** "Arbitration" is the fancier word for resource management.
+2. **It is the interface between the user and the hardware.**
+   - The OS sits between the user's apps (like TikTok) and the hardware.
+   - **Analogy:** A bank clerk. You give the clerk a slip. The clerk brings cash from the vault. You are the app, the clerk is the OS, and the vault is the hardware.
 
-- **Hides the underlying complexity of the hardware. (Aka, Abstraction)**
-  - **Example:** in C/C++ you call `malloc` (or `new`) for 10 bytes. You get the memory. You never see how the OS finds free memory, or in which sector.
-  - **Abstraction:** the OS keeps all hardware code in its own code base and hides it from you.
-- facilitates execution of application programs by providing isolation and protection.
+3. **It manages resources.** These include memory, devices, files, security and processes.
+   > **Interview:** Resource management is also called **arbitration**.
+
+4. **It hides the complexity of the hardware.** This is called **abstraction**.
+   - **Example:** In C/C++ you call `malloc` (or `new`) for 10 bytes. You get the memory. You never see how the OS finds free memory.
+   - The OS keeps all hardware code in its own code base. It hides that code from you.
+
+5. **It helps apps run safely.** It keeps apps isolated and protected from each other.
 
 ```
           O
@@ -82,4 +90,4 @@ Picture a minimal computer with no OS. It has a CPU, memory, a GPU, and a disk.
 +------------------------+
 ```
 
-The operating system provides the means for proper use of the resources in the operation of the computer system.
+The OS makes sure the computer's resources are used properly.
