@@ -1,25 +1,26 @@
 # Lecture 21: The Master-Slave Database Concept
 
-```
-                Replicate        +-----------------+      Read
-          +--------------------> | Slave Database  | <-----------------+
-          |                      | (MongoDB)       |                   |
-          |                      +-----------------+                   v
-+-----------------+                                              +-------------+
-| Master Database |                                              | App Service |
-| (PostgreSQL)    |                                              +-------------+
-+-----------------+              +-----------------+                   ^   ^
-   ^      |        Replicate     | Slave Database  |      Read         |   |
-   |      +--------------------> | (MongoDB)       | <-----------------+   |
-   |                             +-----------------+                       |
-   |                                                                       |
-   +------------------------------- Write ---------------------------------+
+```mermaid
+flowchart LR
+  M[("Master database<br/>(PostgreSQL)")] -- "replicate" --> S1[("Slave database<br/>(MongoDB)")]
+  M -- "replicate" --> S2[("Slave database<br/>(MongoDB)")]
+  App["App service"] -- "write" --> M
+  App -- "read" --> S1
+  App -- "read" --> S2
 ```
 
 1. **Master-slave** is a general way to optimise IO in a system. It is used when the number of requests goes so high that a single DB server cannot handle it efficiently.
    - **Normal setup:** Servers S1, S2 and S3 sit behind a load balancer. Millions of requests reach the load balancer. It sends each one to the least busy server.
    - **One DB:** Every request from every server goes to that one DB. It serves all servers as the database server.
    - **Single point of failure:** If that DB crashes or gets hacked, the whole system blocks. Availability becomes zero. Requests are not served (they return bad requests or failures).
+
+   ```mermaid
+   flowchart LR
+     LB["Load balancer"] --> S1["S1"] & S2["S2"] & S3["S3"]
+     S1 --> DB[("One DB<br/>single point of failure")]
+     S2 --> DB
+     S3 --> DB
+   ```
    - **Solution:** Add another DB as a copy (replica). Requests are divided between the DBs, so some go to one and some to the other.
    - **Name:** This architecture is called master-slave architecture. One DB is the master. The other is the slave.
    - **Usage:** Master-slave is very widely used in computer science (also seen as master-slave flip-flop in circuits).
@@ -54,11 +55,36 @@
    - **Asynchronous replication**
      - **Example:** At t = 0, a write "set X = 10" reaches the master. The slaves get updated later, for example one at t = 10 and another at t = 12.
      - **Stale read:** Any read on a slave between t = 0 and its update time returns the old value of X (say 20).
+
+     ```mermaid
+     sequenceDiagram
+       participant C as Client
+       participant M as Master
+       participant S1 as Slave 1
+       participant S2 as Slave 2
+       C->>M: t = 0: set X = 10
+       M-->>C: success (at once)
+       C->>S1: read X before t = 10
+       S1-->>C: X = 20 (stale)
+       M->>S1: t = 10: replicate X = 10
+       M->>S2: t = 12: replicate X = 10
+     ```
      - **Fit:** It is fine when the application accepts a small delay in reads, as in the cab booking system.
      - **Limit:** The delay must not be large. It should be seconds, not hours or days. Updates should reach the replicas shortly after.
    - **Synchronous replication**
      - **Example:** Banking or UPI (GPay). The balance is 10000. A client pays 1000, so it must become 9000. If the client reads from a replica with a 10 second delay, it still shows the old balance 10000, which is wrong.
      - **How:** Replicate synchronously. When the write `X = X - 1000` arrives, do not return success until it has been replicated. Apply it on the master. Send the same query to each slave. Only after the slaves return success, return success for the write.
+
+     ```mermaid
+     sequenceDiagram
+       participant C as Client
+       participant M as Master
+       participant S as Slaves
+       C->>M: X = X - 1000 (10000 to 9000)
+       M->>S: same query
+       S-->>M: success
+       M-->>C: success (only now)
+     ```
      - **Use:** When no delay at all is acceptable.
    - **Choice:** Which one to use depends on the system being built.
    - **What if an update query reaches a slave?**
@@ -70,6 +96,13 @@
 ## Advantages
 
 1. **Backup:** If the primary (master) goes down, read requests can still be sent to the slaves.
+
+   ```mermaid
+   flowchart LR
+     W["Writes"] -. "ignored for a while" .-> M[("Master: down")]
+     R["Reads"] --> S1[("Slave 1")]
+     R --> S2[("Slave 2")]
+   ```
    - Writes are ignored for a while, but reads keep working. So the system does not fail completely. Only a portion fails.
    - **For multiple masters:** Go to the multi-primary configuration (Pattern 4).
 2. **Read scale out:** Read operations are scaled out. This is good where reads are far more than writes. Latency is reduced and responses come faster.
