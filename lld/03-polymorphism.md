@@ -1,12 +1,12 @@
 # Lecture 3: Polymorphism, Virtual Functions and Abstraction
 
 1. **What is polymorphism?**
-   1. Polymorphism means "many forms": the same message (function call) behaves differently depending on the object that receives it.
-   2. Example: `animal.Sound()` prints "Meow" for a cat and "Bark" for a dog, even though the calling code only knows it has "an animal".
-   3. To get there we need two tools: references and pointers to a base class, and `virtual` functions.
+   1. Polymorphism means "many forms". The same message (function call) behaves differently depending on the object that receives it.
+   2. **Example:** `animal.Sound()` prints "Meow" for a cat and "Bark" for a dog. The calling code only knows it has "an animal".
+   3. **Two tools needed:** references and pointers to a base class, and `virtual` functions.
 2. **References and pointers (quick recap)**
-   1. A reference is another name for an existing variable. Changing it changes the original.
-   2. A pointer stores the address of a variable. `*ptr` reaches the original.
+   1. **Reference:** Another name for an existing variable. Changing it changes the original.
+   2. **Pointer:** It stores the address of a variable. `*ptr` reaches the original.
 
       ```cpp
       int a = 10;
@@ -20,10 +20,14 @@
       ```
 
    3. Differences:
-      1. A pointer can be reassigned to point somewhere else (`ptr = &c;`). A reference is bound once, at creation, and can never be rebound.
-      2. A reference must be initialized when declared. A pointer can be `nullptr`.
-   4. Passing by reference (`Animal &animal`) lets a function work on the caller's original object, with no copy. That is why the functions below take `Animal&`.
-   5. Stack vs heap objects can both be passed this way:
+
+      | | Pointer | Reference |
+      |---|---------|-----------|
+      | **Rebinding** | Can be reassigned to point somewhere else (`ptr = &c;`). | Bound once, at creation. It can never be rebound. |
+      | **Initialization** | Can be `nullptr`. | Must be initialized when declared. |
+
+   4. **Pass by reference:** `Animal &animal` lets a function work on the caller's original object, with no copy. So the functions below take `Animal&`.
+   5. **Stack and heap objects:** Both can be passed this way.
 
       ```cpp
       Animal animal;               // object on the stack
@@ -33,7 +37,9 @@
       ```
 
 3. **A base reference only sees the base part**
-   1. Picture a `Derived` object as two stacked boxes. The top box is the Base part, with `A()`, `B()`, `C()`. The bottom box is the Derived part, with `A()`, `E()`, `F()`.
+   1. A `Derived` object is two stacked boxes.
+      - **Top box:** The Base part, with `A()`, `B()`, `C()`.
+      - **Bottom box:** The Derived part, with `A()`, `E()`, `F()`.
    2. `Base &B = D;` is allowed, because a Derived IS-A Base. But `B` points only to the Base box.
 
       ```cpp
@@ -46,9 +52,9 @@
       }
       ```
 
-   3. Without anything extra, the compiler picks the function from the **type of the reference** (Base), not from the real object (Derived). This is decided at compile time.
+   3. Without anything extra, the compiler picks the function from the **type of the reference** (Base). It does not use the real object (Derived). This is decided at compile time.
 4. **Virtual functions**
-   1. Mark the base function `virtual`. Now a call through a base reference or pointer runs the version of the **actual object**, decided at runtime.
+   1. Mark the base function `virtual`. A call through a base reference or pointer then runs the version of the **actual object**. This is decided at runtime.
 
       ```cpp
       #include <iostream>
@@ -86,10 +92,10 @@
       ```
 
       1. `Animal &animal = cat` refers to the Animal (base) part of `cat`. Without `virtual`, both calls would print "No Sound".
-      2. With `virtual`, the most derived `Sound()` is performed, so `PlaySound` automatically does the right thing for a cat and for a dog.
+      2. With `virtual`, the most derived `Sound()` is performed. So `PlaySound` does the right thing for a cat and for a dog.
       3. `PlaySound` never has to change when we add a `Cow` class. That is the payoff of polymorphism.
-   2. In a chain `Top → Middle → Bottom`, if `Top::A()` is virtual, a call through a `Top&` reaches the most derived override, `Bottom::A()`. This happens even if `virtual` isn't written again in `Middle`, because once virtual, always virtual.
-   3. Same idea through pointers:
+   2. **Chains:** Take a chain Top, Middle, Bottom. If `Top::A()` is virtual, a call through a `Top&` reaches the most derived override, `Bottom::A()`. This holds even if `virtual` is not written again in `Middle`, because once virtual, always virtual.
+   3. **Pointers:** The same idea works through pointers.
 
       ```cpp
       Cat *cat_ptr = new Cat();
@@ -98,13 +104,16 @@
       animal_ptr->Sound();              // Meow, because Sound() is virtual
       ```
 
-      1. `cat_ptr` sees the whole object. `animal_ref` and `animal_ptr` see only the Animal part, yet the call still reaches `Cat::Sound()`.
-   4. How it works (good to know): every class with virtual functions gets a table of function pointers (the **vtable**). Each object carries a hidden pointer to its class's vtable. A virtual call looks up the right function in that table at runtime.
+      1. `cat_ptr` sees the whole object. `animal_ref` and `animal_ptr` see only the Animal part. The call still reaches `Cat::Sound()`.
+   4. **How it works (good to know):** Every class with virtual functions gets a table of function pointers, the **vtable**.
+      - Each object carries a hidden pointer to its class's vtable.
+      - A virtual call looks up the right function in that table at runtime.
 5. **`override` and `final`**
-   1. `override` on a derived function tells the compiler "this is meant to override a virtual base function". If it doesn't (wrong name, wrong parameters, base not virtual), it is a compile-time error. This catches silent typos like `Sound(int)`.
-   2. `final` on a virtual function means derived classes may not override it any further, or it is a compile-time error. `final` on a class (`class Cat final : public Animal`) means nobody can inherit from it.
+   1. **`override`:** On a derived function, it tells the compiler "this is meant to override a virtual base function". If it does not (wrong name, wrong parameters, base not virtual), it is a compile-time error. This catches silent typos like `Sound(int)`.
+   2. **`final`:** On a virtual function, it means derived classes may not override it any further. Doing so is a compile-time error.
+   3. **`final` on a class:** `class Cat final : public Animal` means nobody can inherit from it.
 6. **Virtual destructors**
-   1. Problem: deleting a derived object through a base pointer.
+   1. **Problem:** Deleting a derived object through a base pointer.
 
       ```cpp
       Animal *animal_ptr = new Cat();
@@ -116,7 +125,7 @@
 7. **Best practices**
    1. Use the `virtual` keyword on virtual functions in the base class.
    2. Use the `override` specifier (and not `virtual`) on overriding functions in derived classes. This includes virtual destructors.
-   3. Whenever you are dealing with inheritance, make any explicit destructor virtual.
+   3. Whenever you deal with inheritance, make any explicit destructor virtual.
 8. **Object slicing**
    1. Slicing happens when a derived object is **copied** into a base object, not referenced.
 
@@ -126,7 +135,7 @@
       B.A();        // always Base::A(), even if A() is virtual
       ```
 
-   2. `D` has both parts, Base and Derived. `B` is a brand-new Base object, so only the Base part is copied and the Derived part is sliced off.
+   2. `D` has both parts, Base and Derived. `B` is a brand-new Base object. Only the Base part is copied. The Derived part is sliced off.
    3. Polymorphism works only through references and pointers, never through copies. So pass `Animal&` or `Animal*`, never plain `Animal`.
 9. **Pure virtual functions, abstract classes and interfaces**
    1. A **pure virtual function** has no body at all. It is a placeholder that derived classes are meant to redefine.
@@ -138,7 +147,7 @@
       };
       ```
 
-   2. An **abstract base class** is any class with one or more pure virtual functions. It cannot be instantiated:
+   2. An **abstract base class** is any class with one or more pure virtual functions. It cannot be instantiated.
 
       ```cpp
       Animal animal;   // compile error: Animal is abstract
@@ -146,9 +155,9 @@
 
       1. A derived class that overrides every pure virtual function becomes concrete, so `Cat cat;` works. If it leaves even one, it is still abstract.
       2. Pointers and references to an abstract class are fine: `Animal *a = new Cat();`.
-   3. An **interface class** is a class with no member variables, where all functions are pure virtual.
-      1. Interfaces define what derived classes must implement, and leave how entirely up to the derived class.
+   3. An **interface class** has no member variables, and all its functions are pure virtual.
+      1. Interfaces define what derived classes must implement. How is left entirely to the derived class.
       2. Give it a virtual destructor too: `virtual ~ShapeInterface() = default;`.
-   4. **Abstraction**, the fourth pillar of OOP, is exactly this: callers depend on what an object can do (the interface), not how it does it. `PlaySound` knows only that an `Animal` has `Sound()`.
-   5. Interfaces are the building block of everything ahead. SOLID's D principle and every design pattern in these notes are built on "depend on an interface, plug in a concrete class".
-10. Next: so far one class inherits from another (IS-A). Objects also contain and use other objects, like a person and their heart or a doctor and their patients. These HAS-A relationships come next.
+   4. **Abstraction**, the fourth pillar of OOP, is exactly this. Callers depend on what an object can do (the interface), not how it does it. `PlaySound` knows only that an `Animal` has `Sound()`.
+   5. **Why it matters:** Interfaces are the building block of everything ahead. SOLID's D principle and every design pattern in these notes are built on "depend on an interface, plug in a concrete class".
+10. **Why relationships come next:** So far one class inherits from another (IS-A). Objects also contain and use other objects, like a person and their heart, or a doctor and their patients. These HAS-A relationships come next.
