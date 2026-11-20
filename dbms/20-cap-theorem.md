@@ -19,6 +19,12 @@
       - A partition-tolerant system does not fail, whether messages are dropped or delayed between nodes.
       - To have partition tolerance, the system must replicate records across combinations of nodes and networks.
       1. **Example:** Node A is the primary and node B is its replica. They must communicate to replicate data. A partition is the communication link between them breaking.
+
+         ```mermaid
+         flowchart LR
+           A[("Node A<br/>primary")] -- "replicate" --x B[("Node B<br/>replica")]
+           X["partition: link broken"] -.- A
+         ```
       2. **Tolerant:** The partition happens, but the system does not fail and stays up. Some messages may be delayed or data may be inconsistent, but the system keeps running.
       3. **Recovery:** When the node comes back up and the link is re-established, the data must be replicated again.
 
@@ -34,17 +40,37 @@
       4. **Option 1: stay available.** Serve both reads and writes. A read on node B returns the previous value (say x = 20) instead of 10. The latest write is not read, so consistency is lost.
       5. **Option 2: stay consistent.** A read during the partition would return the stale value. So reject it and return a failed or bad request. Availability is lost.
       6. **Conclusion:** During a partition, either consistency is lost or availability is lost. One of the two happens. This is what the CAP theorem says.
+
+         ```mermaid
+         sequenceDiagram
+           participant W as Writer
+           participant A as Node A (primary)
+           participant B as Node B (replica, x = 20)
+           participant R as Reader
+           Note over A,B: Partition: link A to B is down
+           W->>A: write x = 10
+           A--xB: replicate (fails)
+           R->>B: read x
+           alt Option 1: stay available (AP)
+             B-->>R: x = 20 (stale, consistency lost)
+           else Option 2: stay consistent (CP)
+             B-->>R: failed / bad request (availability lost)
+           end
+         ```
    5. A single-node system has no problem, since a partition never occurs there. A partition means a break in the link between two distributed nodes.
 
 5. **CAP theorem and NoSQL databases**
    - NoSQL databases are great for distributed networks. They allow horizontal scaling, and they can quickly scale across multiple nodes.
    - When deciding which NoSQL database to use, keep the CAP theorem in mind.
 
-   ```
-              Consistency
-              /         \
-           CA     .      CP
-        Availability  AP  Partition Tolerance
+   ```mermaid
+   flowchart TB
+     C(("Consistency"))
+     A(("Availability"))
+     P(("Partition<br/>tolerance"))
+     C --- CA["CA: MySQL, PostgreSQL<br/>(single node)"] --- A
+     C --- CP["CP: MongoDB"] --- P
+     A --- AP["AP: Cassandra, DynamoDB"] --- P
    ```
 
    The three properties cannot all exist together. Only the intersection of two properties is possible: CA, CP or AP.
@@ -85,6 +111,13 @@
       2. The system stays inconsistent for a while. This is fine if the business logic allows it. Example: x = 10 is written on one node, and the other node (still available) returns the old value x = 20. This does not matter in AP databases.
       3. When the link is re-established, replication syncs the nodes and both become consistent again.
       4. This is called **eventual consistency.** AP databases are eventually consistent. It is important to know this.
+
+         ```mermaid
+         flowchart LR
+           P["Partition"] --> I["Both nodes serve reads and writes<br/>A: x = 10, B: x = 20"]
+           I --> L["Link re-established"]
+           L --> S["Replication syncs: A = B, x = 10<br/>(eventually consistent)"]
+         ```
       5. Cassandra and DynamoDB are examples.
       6. **Use case:** Social media, where availability is valued more than consistency.
 
@@ -92,6 +125,14 @@
    1. **Banking system:** CP (for example MongoDB).
    2. **Social media website:** AP (for example Cassandra, DynamoDB).
    3. **CA databases:** Use them only when you assume a partition will never happen, that is, on a single node. They are not practical in a distributed system, since a partition is certain there.
+
+   ```mermaid
+   flowchart TB
+     Q{"What matters more during a partition?"}
+     Q -- "consistency (banking)" --> CP["CP: MongoDB<br/>ACID"]
+     Q -- "availability (social media)" --> AP["AP: Cassandra, DynamoDB<br/>BASE"]
+     Q -- "no partition: single node" --> CA["CA: MySQL, PostgreSQL"]
+   ```
 
 7. **ACID vs BASE**
    1. A banking system follows the ACID properties. Social networking systems follow the BASE properties.
