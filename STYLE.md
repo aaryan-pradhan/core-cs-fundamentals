@@ -4,7 +4,8 @@ These are revision notes. The reader has already studied the topic. They read a 
 
 ## 1. Skeleton
 
-- The source PDF text (`<subject>/src/`) is the skeleton. Keep it word for word, with its own `1.` / `a.` numbering.
+- The source PDF (`<subject>/src/`) is the skeleton. Keep its order, sections and `1.` / `a.` numbering.
+- Rewrite the PDF's own lines into short, simple, complete sentences too. Split a long sentence into a few short ones or a bullet list. Keep every fact.
 - Each section heading in the PDF becomes a `##` heading.
 - Put lecture extras as short sub-points under the PDF line they explain.
 
@@ -17,7 +18,8 @@ These are revision notes. The reader has already studied the topic. They read a 
 ## 3. Plain English
 
 - One idea per sentence.
-- Short sentences. Active voice.
+- Short, complete sentences. No sentence fragments ("Bulky and complex app." becomes "Apps become bulky and complex."). A bold label before a colon is fine.
+- Active voice.
 - Common words. No shortcuts like "mgmt", "HW", "w/".
 - No arrows or symbols in text. Write the word instead ("so", "then", "gives").
 - Write like the source PDF: simple, short, direct.
