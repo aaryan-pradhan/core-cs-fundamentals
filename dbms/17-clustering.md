@@ -13,6 +13,18 @@
    - Make servers S1, S2 and S3 holding databases D1, D2 and D3. D1 = D2 = D3, so the same data is stored on all three servers.
    - It is not the case that S1 holds more users and S2 fewer. Every server holds the same users' data (for example 1000 users on each).
    - This set of servers (replicas) is one cluster.
+
+   ```mermaid
+   flowchart LR
+     subgraph Cluster["One cluster (replica set)"]
+       direction TB
+       S1["S1: D1"]
+       S2["S2: D2"]
+       S3["S3: D3"]
+     end
+     S1 <-. "sync: D1 = D2 = D3" .-> S2
+     S2 <-. "sync" .-> S3
+   ```
    - **Architecture:** Create the same instances, make replicas, and store them as a cluster.
    - **Server / node / host:** A capable computer connected to the internet. Its main job is to store data, take requests, process the data and send it back.
 
@@ -22,6 +34,13 @@
       - **Not harmful:** This is not the repetition of data that leads to anomalies (the same student stored repeatedly inside one database). Here the same data is replicated across different servers. Within one database it is not duplicated.
       - **Required:** The redundancy that clustering offers is required. It is certain because of synchronisation. It is not always bad. Here it makes the system robust and highly available.
       - **Example:** S1 shuts down (hacker attack, illegal activity detected, regular maintenance, or any problem with the node). With a single server, the website would go down. With replicas, S2 returns the same data. The user never knows whether data came from S1 or S2. The website stays on.
+
+      ```mermaid
+      flowchart LR
+        U["User"] --> S1["S1<br/>down"]
+        U --> S2["S2<br/>returns the same data"]
+        S1 -. "fails" .-> X["no reply"]
+      ```
       - **Abstraction:** A layer of abstraction is added. The user does not know whether data comes from S1, S2 or S3. This is hidden from the user.
 
    2. **Load balancing:** Load balancing (scalability) does not come by default with a database. Clustering has to bring it. It also depends on the setup.
@@ -32,6 +51,14 @@
       - **With replicas:** Give some requests to S1, some to S2 and some to S3. The load is balanced and no system crashes.
       - **Why balance:** Requests execute fast (an overloaded server delays them). No single server crashes. Both point to availability.
       - **Load balancer:** This needs a layer, logic or interface called the load balancer. Requests arrive at the load balancer. It checks which server (S1, S2 or S3) is less loaded and passes the new request to it.
+
+      ```mermaid
+      flowchart LR
+        R["Requests"] --> LB["Load balancer<br/>picks the least loaded"]
+        LB --> S1["S1"]
+        LB --> S2["S2"]
+        LB --> S3["S3"]
+      ```
       - **Architecture:** With replica sets, the architecture needs a load balancer.
 
    3. **High availability:** If you can access a database, it is available. High availability is the amount of time a database is considered available.
