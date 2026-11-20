@@ -28,6 +28,20 @@
 - **Scale out:** Partitioning is a scale-out (horizontal scaling) technique. The capacity of a single node is not increased. Data is split and new nodes are added.
 - **Versus clustering:** Clustering is also horizontal scaling, because new nodes are added. But there the whole data is copied. In partitioning, the data is divided between servers.
 
+```mermaid
+flowchart LR
+  subgraph C["Clustering: whole data copied"]
+    direction TB
+    M["Master: all data"] -- "propagate updates" --> R1["Replica: all data"]
+    M -- "propagate updates" --> R2["Replica: all data"]
+  end
+  subgraph P["Partitioning: data divided"]
+    direction TB
+    P1["S1: part 1"]
+    P2["S2: part 2"]
+  end
+```
+
 ---
 
 1. **Idea of partitioning:** A big problem is solved easily when it is chopped into smaller sub-problems.
@@ -58,6 +72,15 @@
    | Vertical | Columns | Two columns on S1, two on S2 | Needs both servers |
    | Horizontal | Rows | Roll no 1 to 25K on S1, rest on S2 | One server |
 
+   ```mermaid
+   flowchart LR
+     T["Student<br/>name | id | class | address | phone"]
+     T -- "vertical: by columns" --> V1["S1: name, id"]
+     T -- "vertical" --> V2["S2: class, address, phone"]
+     T -- "horizontal: by rows" --> H1["S1: roll no 1 to 25K<br/>(full tuples)"]
+     T -- "horizontal" --> H2["S2: roll no 25K to 100K<br/>(full tuples)"]
+   ```
+
 5. **When is partitioning applied?**
    1. The dataset becomes so huge that managing it is a tedious task.
    2. The number of requests is so large that access to a single DB server takes huge time. So the response time of the system becomes high.
@@ -67,6 +90,12 @@
    1. **Parallelism**
       - Chunk 1 is on S1 and chunk 2 is on S2.
       - Incoming requests are filtered by the key (for example id 1 to 10000 on S1, the rest on S2). Each request goes to the server holding its data. So requests are served in parallel.
+
+      ```mermaid
+      flowchart LR
+        Q1["Request id 42"] --> S1["S1: id 1 to 10000"]
+        Q2["Request id 50000"] --> S2["S2: rest"]
+      ```
    2. **Availability**
       - All DB optimisation techniques increase availability (as in clustering).
       - If node S1 crashes, only the requests for S1's data are affected, not all of them.
@@ -95,6 +124,13 @@
       - **Shard:** Each part is called a shard. Shard 1 holds roll no 1 to 10K. Shard 2 holds roll no above 10K to 100K. Each shard is stored on its own server. "Shard" is just a name.
       - **Independence:** Shards are independent. A request for roll no 1 to 10K goes to S1. Other requests go to S2.
       - **Routing layer:** It is a layer written in the application layer (software). It decides which shard a request goes to (S1 or S2). It is additional logic, a lookup (an intermediate layer). It is needed whenever sharding is applied.
+
+      ```mermaid
+      flowchart LR
+        App["Request (roll no)"] --> RL{"Routing layer<br/>look up shard key"}
+        RL -- "roll no 1 to 10K" --> SH1["Shard 1 on S1"]
+        RL -- "roll no above 10K" --> SH2["Shard 2 on S2"]
+      ```
       - **Invoice example:** An Invoice table has its data split between Database Shard 1 and Database Shard 2 (one colour of rows on each). The split is made on a custom id (customer id), not on the primary key (invoice id).
       - **Shard key (partition key):** The column on which the split is made. In the Student table it was student (roll no). In the Invoice table the primary key is invoice id, but the shard key can be something else (customer id).
       - **Interviews and industry:** Partitioning and sharding are used as the same thing (vertical sharding, horizontal sharding). They are not exactly synonyms. By theory, sharding is a way of horizontal partitioning.
@@ -107,10 +143,25 @@
       1. **Complexity:** You must make the partition mapping, implement a routing layer in the system, and handle non-uniformity, which creates the need for re-sharding.
          - **Mapping:** You must identify which shard a request belongs to, based on the partition key. This needs an additional routing layer which you write yourself.
          - **Non-uniformity:** The shard key should divide the data uniformly (for example 3 rows to each node out of 6). If the shard key is not the primary key, one key value can have far more rows (for example customer id 2 has placed 10,000 orders). Then that shard gets much more data than the other. The division becomes non-uniform and the original problem comes back.
+
+         ```mermaid
+         flowchart LR
+           K["Shard key: customer id"] --> A["Shard 1<br/>customer 2: 10,000 orders"]
+           K --> B["Shard 2<br/>other customers: few orders"]
+           A -. "overloaded, so re-shard" .-> K
+         ```
          - **Re-sharding:** Handling this is your responsibility. Re-shard from time to time. That means you change the partition key and shard again.
       2. **Not well suited for analytical queries,** because the data is spread across different DB instances. This is the **scatter-gather problem.**
          - **Example:** An Invoice table has an amount column. The query is the total amount ordered by each customer. On a single node, one aggregation function (SUM) in SQL would answer it.
          - **With sharding:** The data is on multiple nodes. The query goes to the first node and finds its sum. It goes to the second node and finds its sum. Then both sums are combined.
+
+         ```mermaid
+         flowchart LR
+           Q["SUM(amount) per customer"] -- "scatter" --> N1["Node 1: partial sum"]
+           Q -- "scatter" --> N2["Node 2: partial sum"]
+           N1 -- "gather" --> G["Combine the sums"]
+           N2 -- "gather" --> G
+         ```
          - **Cost:** Another layer (or the DBMS) has to handle this. This adds complexity.
 
 - **Trade-off:** You have to give up something to gain something. Pros come with cons. Sharding and partitioning are still used a lot.
