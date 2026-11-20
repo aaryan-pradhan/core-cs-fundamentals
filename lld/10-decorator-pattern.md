@@ -1,13 +1,19 @@
 # Lecture 10: Decorator Pattern
 
-1. **Structural patterns** help connect different pieces together to form a larger structure. They define simple ways to compose objects to create new functionality. Decorator is the structural pattern in this course.
+1. **Structural patterns** connect different pieces into a larger structure. They define simple ways to compose objects to create new functionality.
+   - **In this course:** Decorator is the structural pattern.
+
 2. **Definition**
-   1. The Decorator pattern allows behaviour to be added to individual objects **dynamically**, without affecting the behaviour of other objects from the same class.
-   2. The problem it solves: a coffee shop sells simple coffee with any mix of milk, sugar, caramel, and so on. One subclass per combination (`MilkCoffee`, `MilkSugarCoffee`, `MilkSugarCaramelCoffee`, ...) explodes in number. Decorators let us build any combination at runtime by **wrapping** one object inside another.
-   3. A decorator is a "wrapper" with two links to the component:
-      1. It **is a** `Coffee` (inheritance), so a decorated coffee can be used anywhere a plain coffee can.
-      2. It **has a** `Coffee*` (the object it wraps). Each call is forwarded to the wrapped coffee, and the decorator adds its own bit on top.
-   4. This gives two levels of inheritance: `Coffee` → `CoffeeDecorator` → `MilkDecorator` / `SugarDecorator`.
+
+   1. The Decorator pattern adds behaviour to individual objects **dynamically**. Other objects of the same class are not affected.
+   2. **The problem it solves:** A coffee shop sells simple coffee with any mix of milk, sugar, caramel and so on.
+      - **Subclass per combination:** `MilkCoffee`, `MilkSugarCoffee`, `MilkSugarCaramelCoffee` and so on. The number of classes explodes.
+      - **With decorators:** You build any combination at runtime by **wrapping** one object inside another.
+   3. A decorator is a wrapper with two links to the component:
+      1. **Is a `Coffee` (inheritance):** A decorated coffee can be used anywhere a plain coffee can.
+      2. **Has a `Coffee*` (the object it wraps):** Each call is forwarded to the wrapped coffee. The decorator adds its own part on top.
+   4. **Two levels of inheritance:** `Coffee`, then `CoffeeDecorator`, then `MilkDecorator` and `SugarDecorator`.
+
 3. **Example: coffee**
 
    ```mermaid
@@ -97,19 +103,28 @@
    }
    ```
 
-   1. How a call travels: `with_sugar.GetCost()` asks `with_milk`, which asks `simple`. Then `simple` returns 5.0, milk adds 1.5, and sugar adds 0.5, giving 7.
-   2. The wrapping order is free, and the same decorator can be applied twice (double sugar). No new class is needed for any combination.
-   3. `simple` itself is unchanged. Other `SimpleCoffee` objects are unaffected, which is exactly the "individual objects" part of the definition.
+   1. **How a call travels:** `with_sugar.GetCost()` asks `with_milk`, which asks `simple`.
+      - `simple` returns 5.0.
+      - Milk adds 1.5.
+      - Sugar adds 0.5.
+      - The result is 7.
+   2. **Free order:** The wrapping order is free. The same decorator can be applied twice (double sugar). No new class is needed for any combination.
+   3. **Individual objects:** `simple` itself is unchanged. Other `SimpleCoffee` objects are unaffected. This is the "individual objects" part of the definition.
+
 4. **Decorator vs inheritance vs strategy**
-   1. Inheritance adds behaviour to a whole class, fixed at compile time. A decorator adds it to one object, at runtime.
-   2. Strategy **replaces** the algorithm inside an object. A decorator **adds layers** around an object, keeping the original behaviour and extending it.
+
+   | Pattern | What it does |
+   |---------|--------------|
+   | Inheritance | Adds behaviour to a whole class, fixed at compile time. |
+   | Decorator | Adds behaviour to one object, at runtime. It **adds layers** around an object. It keeps the original behaviour and extends it. |
+   | Strategy | **Replaces** the algorithm inside an object. |
+
 5. **Pros and cons**
-   1. Pros:
-      1. A flexible alternative to subclassing for extending functionality. Behaviour can be added or removed dynamically, without modifying the original object or class.
-      2. Each decorator has a single responsibility, which makes the code easier to manage, extend and keep modular.
-      3. Decorators can be combined in many ways to produce different behaviours, without creating a large number of subclasses.
-   2. Cons:
-      1. It can make the design complex. As the number of decorators grows, the system gets harder to understand and debug.
-      2. All decorators must implement the same interface as the component they decorate. If that interface changes, every decorator must be updated.
-      3. Maintaining many decorators is labour-intensive. Making sure they all work correctly together needs careful testing.
-6. Next: we now have the full toolkit: OOP, relationships, UML, SOLID and four patterns. The rest of the notes apply it the way an interview does, starting with a step-by-step approach to any LLD question.
+
+   | Pros | Cons |
+   |------|------|
+   | A flexible alternative to subclassing. Behaviour can be added or removed dynamically, without modifying the original object or class. | The design can get complex. As decorators grow in number, the system is harder to understand and debug. |
+   | Each decorator has a single responsibility. The code is easier to manage, extend and keep modular. | All decorators must implement the same interface as the component they decorate. If that interface changes, every decorator must be updated. |
+   | Decorators combine in many ways to give different behaviours. You do not need a large number of subclasses. | Maintaining many decorators is labour-intensive. You need careful testing to make sure they all work together. |
+
+6. **Next:** You now have the full toolkit: OOP, relationships, UML, SOLID and four patterns. The rest of the notes apply it the way an interview does. They start with a step-by-step approach to any LLD question.
