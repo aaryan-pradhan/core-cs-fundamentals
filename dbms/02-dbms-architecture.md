@@ -34,6 +34,11 @@
   - **Student data example:**
     - **Physical level:** A file holds name, phone number, address and batch number of student 1, then the same four for student 2, and so on (for example `Ram, 8812..., ..., 201`). You cannot tell it is student data. It is only bytes and strings with commas.
     - **Logical level:** The file becomes a table with columns Name, Phone number, Address and Batch number, one row per student. Now it is visibly student data with four attributes.
+
+    ```mermaid
+    flowchart LR
+      F["Physical level: a file of bytes<br/>Ram, 8812..., ..., 201, ..."] -- "physical to logical mapping<br/>(conceptual schema)" --> T["Logical level: Student table<br/>Name | Phone number | Address | Batch number"]
+    ```
   - **Mapping:** This is the physical to logical mapping. The logical (conceptual) schema defines it.
   - **Second table:** Course has course id, name and duration. Each student enrolls in some courses every semester, so student data also holds a course id.
   - **Relationship:** Student applies for a Course. Courses are applied by Student.
@@ -52,24 +57,22 @@
   - **Security:** Some information (security codes, OTP, secret codes) should not be shown to some groups, for example Logistics. This is applied at the external level.
 - g. Diagram: three schema architecture
 
-```
- External Schema     +----------------+    +----------------+
-                     | External Level |    | External Level |
-                     +----------------+    +----------------+
-                               ^   \           /   ^
-                               |    v         v    |
-                                +----------------+      External / Conceptual
- Conceptual Schema              |Conceptual Level|      Mapping
-                                +----------------+
-                                        ^
-                                        |                Conceptual / Internal
-                                        v                Mapping
- Internal Schema                +----------------+
-                                | Internal Level |
-                                +----------------+
-                                        |
-                                        v
-                                    (Database)
+```mermaid
+flowchart TB
+  subgraph EXT["View level / External level (view schemas, subschemas)"]
+    V1["Logistics view<br/>(name, address, phone)"]
+    V2["Customer service view<br/>(name, address, phone, products ordered)"]
+  end
+  subgraph CON["Logical level / Conceptual level (conceptual schema), used by the DBA"]
+    L["Tables and relationships<br/>Student applies for Course"]
+  end
+  subgraph INT["Physical level / Internal level (physical schema)"]
+    P["Storage structures, compression,<br/>encryption, hashing, block size"]
+  end
+  V1 <-- "External / Conceptual mapping" --> L
+  V2 <--> L
+  L <-- "Conceptual / Internal mapping" --> P
+  P <--> DB[("Database")]
 ```
 
 ## 2. Instances and Schemas
@@ -77,6 +80,12 @@
 - a. The collection of information stored in the DB at a particular moment is called an **instance** of the DB.
   - **Example:** The student table is empty when created. With 2 students, the instance is 2 rows. A day later with a third, it is 3 rows. A year later, thousands. If students withdraw, it shrinks.
   - **Schema versus instance:** The table (schema) stays the same. The instance is the data at that point in time.
+
+    ```mermaid
+    flowchart LR
+      S["Schema: Student table design<br/>(stays the same)"]
+      S --> I0["Instance at creation<br/>0 rows"] --> I1["Instance today<br/>2 rows"] --> I2["Next day<br/>3 rows"] --> I3["A year later<br/>thousands of rows"]
+    ```
 - b. The overall design of the DB is called the DB **schema**.
 - c. A schema is a **structural** description of data. A schema **does not change frequently**. Data may change frequently.
   - Physical-level things may change. The student still looks the same logically.
@@ -110,6 +119,16 @@
 - a. **Data definition language (DDL)** specifies the database schema.
 - b. **Data manipulation language (DML)** expresses database queries and updates.
 - c. **In practice**, both are in a single DB language, for example SQL (Structured Query Language).
+
+  ```mermaid
+  flowchart TB
+    SQL["DB language (SQL)"] --> DDL["DDL: define schema and<br/>consistency constraints<br/>CREATE TABLE"]
+    SQL --> DML["DML: manipulate data"]
+    DML --> R["Retrieval<br/>(query language: SELECT)"]
+    DML --> In["Insertion"]
+    DML --> De["Deletion"]
+    DML --> Up["Updating"]
+  ```
   - **Why a language:** You need a language to interact with the DBMS, like a compiler needs a programming language.
   - **Single language:** One language provides both. C++, Java and Python are separate languages, but DDL and DML are not.
   - **Queries:** A query is part of the DB language. It is sent to the DBMS, which understands it, runs it and returns the result.
@@ -137,6 +156,14 @@
   - **What the API does:** It converts the host language's statements or packets into SQL queries and sends them to the DBMS. It converts the returned data into a host language data structure.
   - i. Open Database Connectivity (**ODBC**), Microsoft "C".
   - ii. Java Database Connectivity (**JDBC**), Java.
+
+  ```mermaid
+  flowchart LR
+    App["App in host language<br/>(Java, C/C++)"] -- "statements" --> API["API<br/>JDBC (Java)<br/>ODBC (C/C++)"]
+    API -- "SQL query" --> DBMS["DBMS"]
+    DBMS -- "result" --> API
+    API -- "host language<br/>data structure" --> App
+  ```
   - **Spring Boot:** A Java Spring Boot backend writes SQL like `INSERT INTO candidate (name, phone...)` as strings or templates in Java. JDBC sends it to the SQL server (the DBMS). The result comes back through JDBC into Java data structures.
 
   > **Interview:** Know how a host language app communicates with SQL. Use JDBC for Java and ODBC for C/C++.
@@ -186,23 +213,18 @@ Client machines are where remote DB users work. Server machines are where the DB
   - **Spring Boot link:** The Spring Boot JDBC code shown earlier was app server code of a WWW application.
   - **Flow:** The client calls the app server. The app server calls the DB. The DB returns data to the app server, which processes it and sends it to the client.
 
-```
- a. two-tier architecture          b. three-tier architecture
-
- +-----------------+               +---------------------+
- |      user       |               |        user         |
- | +-------------+ |               | +-----------------+ |
- | | application | |   client      | | application     | |
- | +-------------+ |               | | client          | |
- +-------|---------+               | +-----------------+ |
-         |                         +----------|----------+
-      network                               network
-         |                         +----------|----------+
- +-------|---------+               | +-----------------+ |
- | +-------------+ |   server      | | application     | |
- | | database    | |               | | server          | |
- | | system      | |               | +-----------------+ |
- | +-------------+ |               | | database system | |
- +-----------------+               | +-----------------+ |
-                                   +---------------------+
+```mermaid
+flowchart TB
+  subgraph T1["T1: one machine"]
+    direction TB
+    C1["Client"] --- S1["DBMS server"] --- D1[("DB files")]
+  end
+  subgraph T2["T2: client and server"]
+    direction TB
+    C2["Client: user + application"] -- "SQL over network<br/>(ODBC / JDBC)" --> S2["Server: database system"]
+  end
+  subgraph T3["T3: three tiers"]
+    direction TB
+    C3["Client: user + application client<br/>(frontend only)"] -- network --> A3["Application server<br/>(business logic, guard)"] --> S3["Database system"]
+  end
 ```
