@@ -26,6 +26,22 @@ This scheme is based on making copies of the DB, called **shadow copies**. It is
    4. The old copy is deleted.
 5. T is **COMMITTED** at the point where the updated db-pointer is written to disk. Writing the new copy to disk alone is not enough. The user is told "committed" only after db-pointer shows the new location.
 
+```mermaid
+flowchart LR
+  subgraph Before["During T"]
+    direction TB
+    P1["db-pointer = 0x01<br/>(on disk)"] --> O1[("Old copy<br/>(shadow, untouched)")]
+    N1[("New copy<br/>(all updates)")]
+  end
+  subgraph After["Commit"]
+    direction TB
+    P2["db-pointer = 0x02"] --> N2[("New copy<br/>= current copy")]
+    O2[("Old copy<br/>deleted")]
+  end
+  Before -- "1. write new copy pages to disk<br/>2. update db-pointer (atomic)" --> After
+  Before -- "abort: delete new copy" --> O1
+```
+
 ### a. Atomicity
 
 - **Failure before the pointer update:** The old content of the DB is not affected.
@@ -36,6 +52,12 @@ This scheme is based on making copies of the DB, called **shadow copies**. It is
 
 - **Failure before the pointer update:** The new copy may already be on disk, but db-pointer still says 0x01. On restart, the system reads db-pointer and sees the original DB. None of T's effects are visible. T counts as successful only when db-pointer is updated.
 - **Failure after the pointer update:** All pages of the new copy were written to disk before that. On restart, the system reads the new copy. db-pointer already says 0x02, so the changes persist. The old copy is already deleted.
+
+```mermaid
+flowchart LR
+  F{"Crash: was db-pointer<br/>updated?"} -- "No (0x01)" --> A["Restart reads old copy<br/>T has no effect"]
+  F -- "Yes (0x02)" --> B["Restart reads new copy<br/>T's changes persist"]
+```
 
 ### c. Atomic pointer write
 
@@ -68,6 +90,12 @@ The log is a sequence of records. The log of each transaction is kept in **stabl
 - **Log records:** `<T0 start>`, `<T0, A, 950>`, `<T0, B, 2050>`, `<T0 commit>`.
 - **Update record:** It holds the transaction id, the variable and its new value.
 
+```mermaid
+flowchart LR
+  T["T0 runs"] -- "log first" --> L[("Stable storage<br/>&lt;T0 start&gt;<br/>&lt;T0, A, 950&gt;<br/>&lt;T0, B, 2050&gt;<br/>&lt;T0 commit&gt;")]
+  L -- "then" --> D[("DB storage<br/>(kept separate)")]
+```
+
 ### a. Deferred DB modifications
 
 This method ensures **atomicity**. It records all DB modifications in the log. It defers all write operations until the final action of T has executed.
@@ -80,6 +108,14 @@ This method ensures **atomicity**. It records all DB modifications in the log. I
   - **On restart:** The system reads the log from stable storage. `<T0 commit>` is there, so T0 did commit.
   - **Redo:** It re-executes the writes from the log and finishes T0.
   - **Same for commit time:** Failure during commit or deferred writes is handled the same way. The commit record proves T0 completed.
+
+```mermaid
+flowchart LR
+  T["T0 writes"] --> L["Log only<br/>(DB untouched)"] --> C{"&lt;T0 commit&gt;<br/>in log?"}
+  C -- "No (crash or abort)" --> I["Ignore log<br/>DB never touched"]
+  C -- "Yes" --> W["Apply writes<br/>A = 950, B = 2050"]
+  W -- "crash during writes" --> R["Restart: redo from log"]
+```
 
 ### b. Immediate DB modifications
 
@@ -100,11 +136,25 @@ DB modifications are output to the DB while T is still active.
 
 - **Redo rule:** Redo only if `<T0 commit>` is in the log. If that line is absent, assume T0 failed and undo it.
 
+```mermaid
+flowchart LR
+  W["Each write: log<br/>&lt;T0, A, 1000, 950&gt;,<br/>then update DB"] --> X["Crash or abort"]
+  X --> C{"&lt;T0 commit&gt;<br/>in log?"}
+  C -- "No" --> U["Undo: write old values<br/>A = 1000, B = 2000"]
+  C -- "Yes" --> R["Redo: write new values<br/>A = 950, B = 2050"]
+```
+
 ### c. Checkpoints (improved log-based method)
 
 - **Problem:** Logs keep growing with thousands or lakhs of transactions. Stable storage fills up, and keeping all old information is costly.
 - **Checkpoint:** It is made at a point where the DB is consistent. All transactions before it (C1, C2, ...) are in the committed state.
 - **Recovery:** If a transaction fails after a checkpoint, recovery needs only the log after the last checkpoint.
+
+```mermaid
+flowchart LR
+  C1["C1 committed"] --> C2["C2 committed"] --> CP["Checkpoint<br/>(DB consistent)"] --> T["T after checkpoint"] --> X["Crash"]
+  X -. "recovery reads only<br/>the log after here" .-> CP
+```
 
 ## 4. Interview
 
