@@ -57,7 +57,8 @@ These are revision notes. The reader has already studied the topic. They read a 
 
 - Where a structure, relationship or flow is clear, add a diagram under its text. Keep the text.
 - ER diagrams use Chen notation, drawn with PlantUML `@startchen`. Keep the source in `dbms/img/src/<lec>-<name>.puml`. Render it to `dbms/img/<lec>-<name>.svg` and embed the SVG.
-- Render with `plantuml -tsvg dbms/img/src/*.puml -o ..`.
+- Chen mode cannot draw an is-a triangle, an aggregation box, a dashed partial-key underline or a double total-participation line. For those, write Graphviz DOT inside `@startdot` in the same `.puml` file.
+- Render with `plantuml -tsvg dbms/img/src/*.puml -o ..`. `@startdot` needs Graphviz (`dot`) installed.
 - All other diagrams (flows, states, architectures) are Mermaid blocks in the note.
 
 ## 9. Do not add
