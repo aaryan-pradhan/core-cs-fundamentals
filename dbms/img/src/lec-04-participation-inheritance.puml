@@ -1,0 +1,11 @@
+@startdot
+graph G {
+  bgcolor=white; node [fontname="Helvetica"]; rankdir=TB;
+  node [shape=box]; Person; Vehicle; Customer; Employee;
+  has [shape=diamond, label="has"];
+  isa [shape=invtriangle, label="is a", fontsize=10];
+  {rank=same; Person; has; Vehicle}
+  Person -- has; has -- Vehicle;
+  Person -- isa; isa -- Customer; isa -- Employee;
+}
+@enddot

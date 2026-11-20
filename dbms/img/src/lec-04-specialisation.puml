@@ -1,0 +1,16 @@
+@startdot
+graph G {
+  bgcolor=white; node [fontname="Helvetica"]; edge [color=black];
+  node [shape=box]; Person; Customer; Student; Employee;
+  node [shape=ellipse];
+  pn [label="Name"]; pa [label="Address"]; pc [label="Contact"];
+  cid [label=<<u>Customer ID</u>>]; cpp [label="Profile picture"];
+  es [label="Salary"]; ej [label="Job role"];
+  isa [shape=invtriangle, label="is a", fontsize=10];
+  Person -- pn; Person -- pa; Person -- pc;
+  Person -- isa;
+  isa -- Customer; isa -- Student; isa -- Employee;
+  Customer -- cid; Customer -- cpp;
+  Employee -- es; Employee -- ej;
+}
+@enddot

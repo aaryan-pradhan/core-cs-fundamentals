@@ -19,19 +19,14 @@
             2. **Same as OOP:** The terms match inheritance in OOP. There is a parent class and child classes. Child entities inherit the attributes (name, address) of the parent.
         2. It is depicted by a **triangle** component.
 
-            ```
-                 Person
-                   |
-                   ▽  (is-a)
-              _____|_____
-             |           |
-          Customer    Employee
-            ```
+            ![Person specialised into Customer, Student and Employee through an is-a triangle](img/lec-04-specialisation.svg)
 
         3. Specialisation can be applied again on a subclass.
             1. Employee can be specialised into HR Manager, Developer and Housekeeping Employee (each is-a Employee).
             2. Each has the Employee attributes plus its own. HR has working hours. Developer has the tech stack. Housekeeping has the building number or block.
             3. Repeated specialisation keeps the ER model simple. You avoid putting all attributes into Person.
+
+            ![Employee specialised into HR Manager, Developer and Housekeeping Employee](img/lec-04-specialisation-employee.svg)
         4. **More examples:** Engineer splits into Civil Engineer, CS Engineer and Chemical Engineer, each with its own attributes. Vehicle splits into Car, SUV and Bus, each with its own properties plus the common ones from Vehicle.
 
     5. **Why** Specialisation?
@@ -48,6 +43,8 @@
         1. **Example:** The designer first creates Car, SUV and Bus as separate entities and finds their attributes. Vehicle does not exist yet.
         2. Car, SUV and Bus share two properties. For example, mileage and vehicle type (such as BS6 engine yes or no).
         3. The designer generalises. The designer creates the super entity Vehicle, deletes the common attributes from the three entities, and puts them in Vehicle.
+
+        ![Car, SUV and Bus generalised into Vehicle, which holds mileage and vehicle type](img/lec-04-generalisation.svg)
     3. An **"is-a"** relationship is present between subclass and super class.
     4. **Example:** **Car**, **Jeep** and **Bus** all have some common attributes. To avoid repeating the common attributes, the DB designer may generalise to a new entity set "**Vehicle**".
     5. It is a **Bottom-up** approach.
@@ -69,6 +66,8 @@
     1. If a parent entity set participates in a relationship, its child entity sets also participate in that relationship.
     2. **Example:** Person and Vehicle have a relationship "has". It is applied on Person, so it automatically applies to Customer and Employee as well.
 
+    ![Person has Vehicle; Customer and Employee are Persons, so they inherit the has relationship](img/lec-04-participation-inheritance.svg)
+
 6. **Aggregation**
     1. **How to show relationships among relationships?** Aggregation is the technique.
         1. **Problem in basic ER:** Take the ternary relationship from LEC-3, Employee works on Branch with Job.
@@ -80,8 +79,12 @@
         2. Treat the relationship "works on" (Employee, Branch, Job) as one entity. Name it after the relationship (the "works on" entity). It hides Employee, Branch and Job inside it.
         3. Draw the relationship "manages" between Manager and this aggregated entity.
         4. Now the ER diagram shows that a manager manages the combination of the three. Nobody manages any of them individually.
+
+        ![Manager manages the aggregated works-on entity (Employee, Branch, Job)](img/lec-04-aggregation.svg)
     3. **Avoid redundancy** by aggregating a relationship as an entity set itself.
         1. **Example 2:** Student attends Semester. The requirement is a "has" relationship with Subject on the aggregated unit of Student and Semester.
         2. Aggregate "Student attends Semester" into a higher-level unit. Relate it with Subject through "has".
+
+        ![The aggregated Student attends Semester unit has Subject](img/lec-04-aggregation-student.svg)
         3. **Not Student has Subject directly:** A student may not be enrolled yet, so would have no subjects.
         4. **Not Semester has Subject directly:** Only the subjects a student has taken in the semester attended are wanted.

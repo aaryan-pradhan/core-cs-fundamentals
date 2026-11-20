@@ -1,0 +1,12 @@
+@startdot
+graph G {
+  bgcolor=white; node [fontname="Helvetica"];
+  node [shape=box]; Vehicle; Car; SUV; Bus;
+  isa [shape=invtriangle, label="is a", fontsize=10];
+  node [shape=ellipse]; m [label="Mileage"]; t [label="Vehicle type\n(BS6 engine?)"];
+  Vehicle -- m; Vehicle -- t;
+  Vehicle -- isa; isa -- Car; isa -- SUV; isa -- Bus;
+  up [shape=plaintext, label="Bottom-up:\ncommon attributes\nmoved up to Vehicle", fontsize=10];
+  Bus -- up [style=invis];
+}
+@enddot

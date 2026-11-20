@@ -1,0 +1,15 @@
+@startdot
+graph G {
+  bgcolor=white; fontname="Helvetica"; node [fontname="Helvetica"]; compound=true; rankdir=LR;
+  subgraph cluster_works {
+    label="Aggregated entity: works on"; style=solid;
+    node [shape=box]; Employee; Branch; Job;
+    works [shape=diamond, label="works on"];
+    Employee -- works; works -- Branch; works -- Job;
+  }
+  Manager [shape=box];
+  manages [shape=diamond, label="manages"];
+  Manager -- manages;
+  manages -- works [lhead=cluster_works];
+}
+@enddot

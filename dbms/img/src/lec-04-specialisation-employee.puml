@@ -1,0 +1,11 @@
+@startdot
+graph G {
+  bgcolor=white; node [fontname="Helvetica"];
+  node [shape=box]; Employee; HR [label="HR Manager"]; Dev [label="Developer"]; HK [label="Housekeeping\nEmployee"];
+  isa [shape=invtriangle, label="is a", fontsize=10];
+  node [shape=ellipse];
+  wh [label="Working hours"]; ts [label="Tech stack"]; bn [label="Building number"];
+  Employee -- isa; isa -- HR; isa -- Dev; isa -- HK;
+  HR -- wh; Dev -- ts; HK -- bn;
+}
+@enddot

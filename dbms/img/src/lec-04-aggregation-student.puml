@@ -1,0 +1,15 @@
+@startdot
+graph G {
+  bgcolor=white; fontname="Helvetica"; node [fontname="Helvetica"]; compound=true; rankdir=LR;
+  subgraph cluster_attends {
+    label="Aggregated: Student attends Semester"; style=solid;
+    node [shape=box]; Student; Semester;
+    attends [shape=diamond, label="attends"];
+    Student -- attends; attends -- Semester;
+  }
+  has [shape=diamond, label="has"];
+  Subject [shape=box];
+  attends -- has [ltail=cluster_attends];
+  has -- Subject;
+}
+@enddot
