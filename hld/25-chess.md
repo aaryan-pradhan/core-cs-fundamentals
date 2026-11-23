@@ -1,239 +1,92 @@
-# 25. Design Chess.com (Real-Time Multiplayer Game)
+# 25. Design Chess.com (Multiplayer Game)
 
-Players find an opponent of similar skill, play a timed game live, and get a new rating after it. The same design works for Ludo and other turn-based games.
+Two players of similar skill are matched and play a live game of chess. After the game, their ratings change and the leaderboard updates.
 
-## Step 1: Functional requirements
+## Step 1: FR
 
-How to write an FR:
+- User should be able to get matched with a player of similar rating for a chosen time control.
+- User should be able to play the game in real time.
+- User should be able to see their rating updated after the game and view the global leaderboard.
 
-- **"User should be able to X":** Something the user does.
-- **"User should see X happening":** Something the user observes.
-- **No implementation details** in an FR.
+Playing a bot, inviting a friend, chat and tournaments are out of scope.
 
-| Core | Below the line (out of scope) |
-|------|-------------------------------|
-| Users can be matched with an opponent by skill, for a chosen time control (for example 10 min) | Playing against a bot |
-| Users can play the started game in real time | Inviting a friend to a game |
-| After a game, users see their rating updated, and a global leaderboard | In-game chat, spectating |
-| | Cheat detection |
+## Step 2: NFR
 
-## Step 2: Non-functional requirements
+- **CAP:** We choose CP ([CAP](14-cap-theorem.md)). Both players must see the same board, and an eventually consistent move is useless.
+- **Latency:** A move reaches the opponent in 50 to 100 ms, and never later than 200 ms.
 
-| NFR | Target |
-|-----|--------|
-| CAP | Strong consistency. Both players must see the same board. There is no point in "eventually" applied moves. |
-| Latency | Under 200 ms in the worst case, aim for 50 to 100 ms. Otherwise it does not feel real-time. |
-| Scale | 10 million DAU. Peaks during tournaments. |
-| Durability | An accepted move is never lost |
-
-**Latency by product type:**
-
-| Product | Tolerable latency |
-|---------|-------------------|
-| Real-time game | 50 to 100 ms, 200 ms worst case |
-| Social media feed | A few hundred ms |
-| Normal API call | 5 s at most |
-
-Real-time products need consistency more. A chat forum like Slack can live with eventual consistency.
-
-### Estimation
+## Step 3: Estimates
 
 | Quantity | Calculation | Result |
 |----------|-------------|--------|
-| Users per second (average) | 10^7 / 10^5 s | 100 |
-| Concurrent games at a tournament peak | 1/100 of DAU playing at the same time | 100,000 |
-| Design load | 5× safety margin | 500,000 concurrent games |
-| Concurrent connections | 2 players per game | 1 million |
-| Game length | Based on the timer | About 10 minutes |
-| Move rate | 500K games, one move every 10 s per game | 50,000 moves per second |
+| DAU | | 10 million (10^7) |
+| Users per second | 10^7 / 10^5 | 100 |
+| Games at peak | 10^7 / 50 = 200K players in 100K games, × 5 | 500K games |
+| Open connections | 500K games × 2 players | 1M |
+| Write QPS at peak | 1M players, each moving about once every 10 s | 100K moves per second |
+| Read QPS at peak | Each move is read once, by the opponent. | 100K per second |
 
-These are not one-click API calls. Each connection stays open for the whole game.
+The peak comes during tournaments. The load is 1M connections that stay open for a 10-minute game, not single clicks. 100K writes per second is far more than one Postgres server can take.
 
-## Step 3: Entities
+## Step 4: Entities
 
 | Entity | Key fields |
 |--------|------------|
-| Player | `player_id`, `profile`, `rating`, `wins`, `losses` |
-| MatchRequest | `id`, `user_id`, `user_rating`, `time_control`, `status` (pending, matched, cancelled), `game_id` (set once matched) |
-| Game | `game_id`, `white_player_id`, `black_player_id`, `compressed_board`, `white_time_ms`, `black_time_ms`, `status` |
-| Move | `move_id`, `game_id`, `from`, `to`, `move_num`, `color` |
+| Player | `id`, `rating`, `wins`, `losses` |
+| MatchRequest | `id`, `user_id`, `user_rating`, `time_control`, `status`, `game_id` |
+| Game | `id`, `white_player_id`, `black_player_id`, `compressed_board`, `white_time`, `black_time`, `status` |
+| Move | `id`, `game_id`, `from`, `to`, `move_num` |
 
-## Step 4: APIs
+## Step 5: APIs
 
-### Matchmaking (REST)
+- `POST /matchmaking {matchType}` asks for a match and returns `{matchRequestId}`. The user ID comes from the auth token.
+- A [WebSocket](16-interview-framework.md) at `/games/{gameId}` carries the game. The client sends `sendMove {from, to, moveNum}` or `resign`. The server sends `checkValid`, `opponentMove` and `gameEnd {result}`, with both players' clocks.
+- `GET /leaderboard` returns the top players.
 
-```
-POST /matchmaking
-Body:     { "timeControl": "10+0" }
-Response: 201 { "matchRequestId": "mr_123" }
-```
-
-The user id comes from the auth token, not the body.
-
-```
-GET /matchmaking/{matchRequestId}
-Response: 200 { "status": "matched", "gameId": "g_456" }
-```
-
-- **How the client learns about the match:** Poll this endpoint, plus a push notification (FCM), the same as Rapido.
-- **Why not SSE:** SSE suits a stream of many updates over time. Here only one event is needed: "you are matched".
-
-### Game (WebSocket)
-
-Once the game starts, both players need real-time, two-way communication. So they use a WebSocket: `wss://.../games/{gameId}`.
-
-| Direction | Message | Fields |
-|-----------|---------|--------|
-| Client to server | `sendMove` | `from`, `to`, `moveNum` |
-| Client to server | `resign` | none |
-| Server to client | `moveResult` | `accepted`, `reason` (if rejected), `whiteTimeMs`, `blackTimeMs` |
-| Server to client | `opponentMove` | `from`, `to`, `whiteTimeMs`, `blackTimeMs` |
-| Server to client | `gameEnd` | `result` (white wins, black wins, draw) |
-
-### Leaderboard (REST)
-
-```
-GET /leaderboard?cursor={cursor}&limit={n}
-Response: 200 [{ "playerId", "rating", "rank" }]
-```
-
-## Step 5: High-level design
+## Step 6: Basic diagram
 
 ```mermaid
 flowchart LR
-    U["User"] -->|"REST"| GW["API gateway"]
-    GW -->|"POST /matchmaking"| MM["Matchmaking service"]
-    MM -->|"pending requests only"| PR[("Pending pool<br/>Redis")]
-    MM -->|"save request"| MDB[("MatchRequest DB")]
-    MM -->|"matched: gameId"| NS["Notification service"]
-    NS -->|"push matchId, gameId"| U
-    U <-->|"WebSocket<br/>(not through the REST path)"| GS["Game server"]
-    GS -->|"log every move"| GDB[("Game DB")]
-    GDB -->|"game result"| LB["Leaderboard and<br/>rating service"]
-    GW -->|"GET /leaderboard"| LB
-```
-
-1. **Match:** The user asks for a match. The matchmaking service saves the request. It keeps only pending requests in a small, fast store (Redis). When it finds an opponent, it creates a game and notifies both users with the `gameId`.
-2. **Play:** Both users open a WebSocket to the game server. The server checks each move, logs it, and sends it to the opponent.
-3. **Rate:** When the game ends, the rating service updates both ratings and the leaderboard.
-
-With this design, all FRs are satisfied.
-
-## Step 6: Deep dives
-
-### Deep dive 1: matchmaking under tournament load
-
-About 100K match requests may arrive at once. The waiting players should be kept sorted by rating, in memory. But the matchmaking service must scale out, so it cannot be stateful.
-
-**Fix:** Keep the waiting pool in Redis, as a sorted set per time control. The score is the rating.
-
-```
-ZADD pool:10min 1600 user_42
-ZRANGEBYSCORE pool:10min 1500 1700
-```
-
-- **Find an opponent:** Search within ±100 rating. If no one is found, widen the range every few seconds (±200, ±400).
-- **No double match:** Redis runs each command and each Lua script atomically. A script that finds an opponent and removes both players with `ZREM` runs as one step. Two players can never get the same opponent.
-- **Fairness:** Store the arrival time too. Among equal candidates, match the player who has waited longest.
-
-**Optimised design with a queue:**
-
-```mermaid
-flowchart LR
-    U["User"] -->|"POST /matchmaking"| GW["API gateway"]
+    U["User"] -->|"find match"| GW["API gateway"]
     GW -->|"route"| MM["Matchmaking service"]
-    MM -->|"i. save request"| MDB[("MatchRequest DB")]
-    MM -->|"i. add to pool"| R[("Redis<br/>sorted by rating")]
-    MM -->|"ii. push request"| Q["Matching queue"]
-    Q -->|"iii. pick up"| WP["Worker pool"]
-    WP -->|"iii. find opponent"| R
-    WP -->|"iv. status = matched"| MDB
-    WP -->|"iv. notify"| NS["Notification service"]
-    NS -->|"push gameId"| U
+    MM -->|"store request"| MDB[("Match request DB")]
+    MM -->|"matchId, gameId"| U
+    U -->|"WebSocket, not through gateway"| GS["Game server"]
+    GS -->|"store moves and result"| GDB[("Game DB")]
+    GW -->|"leaderboard"| LBS["Leaderboard service"]
+    LBS -->|"read ratings"| GDB
 ```
 
-1. The matchmaking service writes the request to the MatchRequest DB and to Redis.
-2. It pushes the request onto the matching queue.
-3. A worker thread picks up the request and tries to match it in Redis.
-4. Once it finds a match, the worker updates both entries in the MatchRequest DB and sends a notification to both users.
+The matchmaking service stores the request and pairs two players. It sends both of them the game ID. Each player then opens a WebSocket to the game server, which checks each move and saves it. At the end, the game server updates both ratings, and the leaderboard reads them. With this design, FRs are satisfied.
 
-### Deep dive 2: the game server
+## Step 7: Problems
 
-Game servers are **stateful**: they keep each live game in memory. This makes responses faster than going to the DB on every move. It brings two problems:
+**1. Matchmaking gets about 100K requests in a tournament.** A sorted waiting list in memory would be fast. But then the matchmaking servers are stateful and hard to scale. The fix is a Redis [sorted set](07-storing-data-and-redis.md) of active requests, ordered by rating. Each Redis command is atomic, so two players cannot both take the same opponent. A timestamp lets players who came first get matched first.
 
-1. **Routing:** Both players of one game must reach the same server.
-2. **Crashes:** A game must survive its server dying.
+**2. Matching is slow when requests arrive in a burst.** The fix is a [queue](13-message-queues.md). The matchmaking service saves the request in the match request DB and in Redis, then pushes it onto a matching queue. A worker takes the request and finds a match in Redis. It updates the match request DB and sends a push notification with the game ID. A [push notification](26-whatsapp.md) is a message that reaches the phone through Apple or Google, even when the app is closed.
 
-**Fix for routing:** A routing server sends every connection to a game server based on `gameId` (consistent hashing, topic 12). Both players of one game always land on the same server. ZooKeeper tracks which game servers are alive, using heartbeats (topic 20).
+**3. The two players are on different game servers.** Each WebSocket stays open on one server, so the servers are stateful. They keep the game in memory, because going to the DB for every move is slow. The fix is a routing server that sends every request with the same game ID to the same game server. [ZooKeeper](20-partitioning.md) checks with heartbeats that each game server is alive.
 
-**Fix for crashes:**
-
-- **Log first:** A move is never accepted until it is logged in the Game DB.
-- **Recover:** If a server dies, the router sends that game to another server. The new server loads the game's state from the Game DB. Clients reconnect and carry on.
+**4. A game server crashes.** A move is accepted only after it is saved in the game DB. When a server dies, its games are routed to another server. That server loads each game from the game DB and carries on.
 
 ```mermaid
 flowchart LR
-    P1["Player 1"] -->|"WebSocket"| GW["API gateway"]
-    P2["Player 2"] -->|"WebSocket"| GW
-    GW -->|"route"| RS["Routing server<br/>hash(gameId)"]
-    ZK["ZooKeeper"] -->|"live servers, via heartbeats"| RS
-    RS -->|"game g_456"| G1["Game server 1<br/>(games in memory)"]
-    RS -->|"other games"| G2["Game server 2"]
-    G1 -->|"log move before accepting"| GDB[("Game DB")]
-    G2 -->|"log moves"| GDB
-    GDB -.->|"reload state after a crash"| G2
+    U["User"] -->|"find match"| MM["Matchmaking service"]
+    MM -->|"1. push request"| Q["Matching queue"]
+    Q -->|"2. pick up"| W["Workers"]
+    W -->|"3. match by rating"| RD[("Redis sorted set")]
+    W -.->|"4. gameId"| U
+    U -->|"5. WebSocket"| RS["Routing server"]
+    RS -->|"same gameId, same server"| GS["Game server (in memory)"]
+    GS -->|"save move first"| GDB[("Game DB")]
+    ZK["ZooKeeper"] -.->|"heartbeat"| GS
 ```
 
-**Move flow:**
+> **Interview:** Say "a Redis sorted set matches players by rating". Then say "a routing server keeps both players on one server, and each move is saved before it is accepted".
 
-```mermaid
-sequenceDiagram
-    participant P1 as Player 1
-    participant GS as Game server
-    participant DB as Game DB
-    participant P2 as Player 2
-    P1->>GS: sendMove e2 to e4, moveNum 1
-    GS->>GS: check move is legal, update clocks
-    GS->>DB: log move 1
-    DB-->>GS: ok
-    GS-->>P1: moveResult accepted, times
-    GS-->>P2: opponentMove e2 to e4, times
-```
+## Likely questions
 
-**Alternative: players on different servers.** Each player connects to any game server. Servers pass moves through a pub/sub channel per game (for example Redis pub/sub on `game:g_456`). Server 1 publishes Player 1's move. Server 2, which holds Player 2, receives it and forwards it. WhatsApp uses exactly this pattern (topic 26).
-
-### Deep dive 3: the clocks
-
-- **The server owns the clock:** The client's time can be faked. The server stores `white_time_ms` and `black_time_ms`.
-- **Each move:** The server subtracts the time since the last move from the mover's clock. It sends both times with every result.
-- **Network delay:** Each player's round trip counts against their thinking time. Servers can add a small allowance for measured lag.
-- **Timeout:** If a player's clock reaches 0, the server sends `gameEnd`.
-
-### Deep dive 4: ratings and the leaderboard
-
-**Elo rating:** Player A (rating Ra) plays B (rating Rb).
-
-- **Expected score:** E = 1 / (1 + 10^((Rb - Ra) / 400)).
-- **New rating:** Ra' = Ra + K × (S - E). S is 1 for a win, 0.5 for a draw, 0 for a loss. K is often 20 to 40.
-- **Effect:** Beating a stronger player gains more points.
-
-**Leaderboard:** A Redis sorted set with the rating as the score.
-
-```
-ZADD leaderboard 1650 user_42
-ZREVRANGE leaderboard 0 99 WITHSCORES
-```
-
-- **Flow:** The game end event goes on a queue. The rating service updates the Player table in the DB and the sorted set.
-- **Cost:** `ZREVRANGE` returns the top 100 in O(log N + 100).
-
-### Does every part scale?
-
-| Part | How it scales |
-|------|---------------|
-| Matchmaking | Stateless service. Redis pool per time control. Queue plus workers smooth the tournament spike. |
-| Game servers | 1M connections. About 50K connections per server means about 20 servers, routed by `gameId`. |
-| Game DB | 50K move writes per second. A write-heavy store (Cassandra, partitioned by `game_id`), or sharded Postgres. |
-| Leaderboard | Redis sorted set, read from replicas |
-
-> **Interview:** The hard parts are matchmaking at a spike and stateful game servers. Say "Redis sorted set by rating with atomic scripts", "route by gameId so both players share a server", and "log every move before accepting it, so another server can take over after a crash".
+- **Why WebSocket for the game?** Both players send moves at any time, and a WebSocket lets both sides send on one open connection.
+- **Why Redis for matchmaking?** It keeps requests sorted by rating in memory, and each command is atomic, so no opponent is taken twice.
+- **How do both players reach the same server?** A routing server sends every request with the same game ID to the same game server.
+- **What if a game server crashes?** Every move is saved in the game DB first, so another server loads the game and carries on.
