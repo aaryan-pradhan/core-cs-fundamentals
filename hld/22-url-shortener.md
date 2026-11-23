@@ -155,7 +155,7 @@ flowchart LR
 | Delete | Not possible. Clearing a bit could remove other items too. |
 | Size | About 10 bits per item gives a 1% false positive rate. 1 billion codes need about 1.2 GB. |
 
-- **Where it is used:** LSM trees skip SSTables with it (topic 17). Caches avoid lookups for keys that do not exist (cache penetration, topic 11).
+- **Where it is used:** LSM trees skip SSTables with it (topic 17). A cache can use one to skip DB lookups for keys that do not exist.
 
 ### Scaling
 
