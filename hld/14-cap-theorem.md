@@ -164,7 +164,7 @@ During a partition, both sides accept writes. When the partition heals, the copi
 | Y | a, b, c |
 | Z | d, e |
 
-Amazon merges the copies: the final cart is a, b, c, d, e. No item the user added is lost. Availability matters more than a perfect cart. The copies become the same in the end. This is **eventual consistency**. Topic 19 covers conflict resolution in depth.
+Amazon merges the copies: the final cart is a, b, c, d, e. No item the user added is lost. Availability matters more than a perfect cart. The copies become the same in the end. This is **eventual consistency**. Topic 18 covers conflict resolution in depth.
 
 ## The consistency spectrum
 
