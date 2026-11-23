@@ -41,7 +41,7 @@ The DB does not store or read single rows. It groups rows into fixed-size **page
 
 - **Page size:** 8 KB in Postgres. 16 KB in MySQL.
 - **Storage model:** How rows are packed in a page depends on the storage model (row store or column store).
-- **Example:** If one page holds 3 rows, then 1001 rows need about 1001 / 3 = 333 pages.
+- **Example:** If one page holds 3 rows, then 1001 rows need 1001 / 3 = 333.7, rounded up to 334 pages (Page 0 to Page 333).
 
 ```mermaid
 flowchart LR
@@ -49,7 +49,7 @@ flowchart LR
     HD -->|"Page 0"| P0["rows 1, 2, 3<br/>Vivek, Rohan, Nitish"]
     HD -->|"Page 1"| P1["rows 4, 5, 6"]
     HD -->|"Page 2"| P2["rows 7, 8, 9"]
-    HD -->|"Page 333"| P3["... row 1000<br/>Shubham"]
+    HD -->|"Page 333"| P3["rows 1000, 1001<br/>... Shubham"]
 ```
 
 ## IO
@@ -58,7 +58,7 @@ An **IO** (input/output) is one read request to the disk.
 
 - **Unit:** An IO reads a whole page, or more. It cannot read a single row. You get all the other rows in that page for free.
 - **Cost:** IOs are expensive. Good DB design keeps the number of IOs as small as possible.
-- **Size:** How many pages one IO fetches depends on disk partitions and other factors.
+- **Size:** One IO can fetch more than one page. The DB and the OS decide this, for example by reading ahead.
 - **OS cache:** Some IOs are served from the operating system cache, not the disk.
 
 > **Interview:** Indexes (topic 12) exist to cut the number of pages a query must read.
