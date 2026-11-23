@@ -1,178 +1,111 @@
 # 26. Design WhatsApp (Chat App)
 
-Users send text messages to one person or to a group. Messages arrive in real time and are delivered later if the receiver is offline.
+Users send messages to one person or a group. Online users get them at once. Offline users get them later.
 
-## Step 1: Functional requirements
+## Step 1: FR
 
-| Core | Below the line (out of scope) |
-|------|-------------------------------|
-| Users can send and receive messages in a one-to-one chat, in real time | Voice and video calls |
-| Users can create group chats (up to 100 members) and message the group | Stories (status), channels |
-| Users receive messages that were sent while they were offline | End-to-end encryption details |
-| Users see message status: sent, delivered, read | Search, message editing |
-| | Media is covered briefly in deep dive 6 |
+- User should be able to send and receive messages in a one-to-one chat.
+- User should be able to create a group (up to 100 members) and message it.
+- User should be able to receive messages sent while they were offline.
+- User should be able to see message status: sent, delivered, read.
 
-## Step 2: Non-functional requirements
+**Out of scope:** Calls, stories, media, end-to-end encryption, search.
 
-| NFR | Target |
-|-----|--------|
-| Latency | An online receiver gets a message in under 500 ms |
-| Durability | A message the server has acknowledged is never lost |
-| Ordering | Messages in one chat appear in the same order for every member |
-| CAP | AP. Keep chatting during a partition. Order and no loss within a chat matter more than instant global consistency. |
-| Scale | 1 billion DAU |
+## Step 2: NFR
 
-### Estimation
+- **CAP:** AP. Chat must keep working. A message arriving a moment late is fine.
+- **Latency:** An online receiver gets a message in under 500 ms.
+- **Durability:** A message the server accepted is never lost.
+- **Ordering:** Every member sees a chat's messages in the same order.
+
+## Step 3: Estimates
 
 | Quantity | Calculation | Result |
 |----------|-------------|--------|
-| Messages per day | 10^9 users × 40 messages | 4 × 10^10 |
-| Messages per second (average) | 4 × 10^10 / 10^5 s | 400,000 |
-| Peak | 2× average | 800,000 per second |
-| Storage per day | 4 × 10^10 × 100 B | 4 TB |
-| Kept on the server | Until delivered, plus 30 days | About 120 TB |
-| Concurrent connections | Half of DAU online at peak | 500 million |
-| Chat servers | About 1 million connections per tuned server | 500+ servers |
-| Bandwidth | 800,000 × 100 B | 80 MB/s, plus group fan-out |
+| DAU | | 1 billion (10^9) |
+| Users per second | 10^9 / 10^5 | 10^4 |
+| Write QPS (peak) | 10^4 × 40 messages × 5 | 2M per second |
+| Read QPS (peak) | Each message read about once | About 2M per second (1 : 1) |
+| Connections | Half of DAU online at peak | 500M |
 
-The number of open connections is the hardest number here, not storage.
+- **2M writes per second:** One Postgres cannot take it. Use Cassandra.
+- **500M connections:** About 1M per server, so 500+ stateful chat servers.
 
-## Step 3: Entities
+## Step 4: Entities
 
-| Entity | Key fields |
-|--------|------------|
-| User | `id`, `phone`, `last_seen` |
-| Chat | `id`, `type` (direct or group), `name` |
-| ChatParticipant | `chat_id`, `user_id`, `role` (admin or member) |
-| Message | `message_id`, `chat_id`, `sender_id`, `content`, `created_at` |
-| Inbox (delivery) | `user_id`, `message_id`, `status` (sent, delivered, read) |
-| Connection | `user_id`, `server_id` (which chat server holds the user's socket) |
+- **User:** `id`, `phone`, `last_seen`
+- **Chat:** `id`, `type` (direct or group), `members`
+- **Message:** `message_id`, `chat_id`, `sender_id`, `content`, `created_at`
+- **Inbox:** `user_id`, `message_id`, `status` (sent, delivered, read)
 
-## Step 4: APIs
+## Step 5: APIs
 
-Messages flow both ways, all the time. So the client keeps a **WebSocket** open (topic 16). REST is used for the rest.
+**REST:**
 
-### WebSocket messages
+- `POST /chats {participantIds, name?}` returns `{chatId}`
+- `GET /chats/{chatId}/messages?cursor=&limit=` returns `Message[]`
+- `GET /inbox?after={lastMessageId}` returns undelivered messages
 
-| Direction | Message | Fields |
-|-----------|---------|--------|
-| Client to server | `sendMessage` | `chatId`, `clientMessageId`, `content` |
-| Server to client | `messageAck` | `clientMessageId`, `messageId`, `createdAt` (status: sent) |
-| Server to client | `newMessage` | `chatId`, `messageId`, `senderId`, `content`, `createdAt` |
-| Client to server | `ackDelivered` | `messageIds` |
-| Client to server | `markRead` | `chatId`, `upToMessageId` |
-| Server to client | `statusUpdate` | `messageId`, `status` (delivered or read) |
+**WebSocket messages:**
 
-### REST
+- `sendMessage {chatId, clientMessageId, content}` (client to server)
+- `newMessage {chatId, messageId, senderId, content}` (server to client)
+- `ackDelivered {messageIds}` and `markRead {chatId, upToMessageId}` (client to server)
 
-| Purpose | API | Response |
-|---------|-----|----------|
-| Create a chat or group | `POST /chats`, body `{ participantIds, name? }` | `201 { chatId }` |
-| Add a group member | `POST /chats/{chatId}/participants`, body `{ userId }` | `200` |
-| Load history | `GET /chats/{chatId}/messages?cursor={cursor}&limit={n}` | `Message[]` |
-| Sync after reconnect | `GET /inbox?after={lastMessageId}` | Undelivered messages |
-
-- **`clientMessageId`:** Made on the phone. If the client resends after a network drop, the server sees the same id and does not store the message twice (idempotency, topic 13).
-
-## Step 5: High-level design
+## Step 6: Basic diagram
 
 ```mermaid
 flowchart LR
-    A["Sender app"] -->|"WebSocket"| LB["L4 load balancer"]
-    LB -->|"long-lived connection"| CS1["Chat server 1"]
-    CS1 -->|"1. store message"| DB[("Message DB<br/>Cassandra")]
-    CS1 -->|"2. where is the receiver?"| REG[("Connection registry<br/>Redis: user to server")]
+    A["Sender"] -->|"sendMessage"| GW["API gateway<br/>auth, rate limit"]
+    GW -->|"route"| CS["Chat service"]
+    CS -->|"store"| DB[("Message DB")]
+    CS -->|"newMessage"| B["Receiver"]
+    GW -->|"POST /chats"| GS["Group service"]
+    GS -->|"members"| DB
+```
+
+The chat service stores each message, then sends it to the receiver. If the receiver is offline, it stays in their inbox until they sync. With this design, FRs are satisfied.
+
+## Step 7: Problems
+
+**1. The receiver must get messages live.** Polling every few seconds wastes calls. Both sides send at any time. Fix: a **WebSocket** per user.
+
+**2. WebSocket servers are stateful.** The sender and receiver sit on different chat servers. Fix: a **registry** in Redis (`user: server`). The sender's server looks up the receiver's server and forwards the message.
+
+**3. The receiver is offline.** Fix: keep the message in the inbox. Send a push notification. On reconnect, the app calls `GET /inbox`.
+
+**4. A server crashes before delivery.** Fix: store in the DB first, then reply `messageAck` (one tick). The client resends with the same `clientMessageId`. The server drops the duplicate.
+
+**5. A group message needs 100 copies.** Fix: a **queue + workers**. Store the message once. Workers put one delivery per member on the queue.
+
+**6. 2M writes per second.** Fix: **Cassandra**, partitioned by `chat_id`. All messages of one chat sit together.
+
+**7. Messages arrive out of order.** Phone clocks cannot be trusted. Fix: the server gives each message an id that grows within a chat. The app sorts by it.
+
+```mermaid
+flowchart LR
+    A["Sender"] -->|"WebSocket"| CS1["Chat server 1"]
+    CS1 -->|"1. store"| DB[("Cassandra<br/>by chat_id")]
+    CS1 -->|"2. where is B?"| REG[("Redis registry<br/>user: server")]
     CS1 -->|"3. forward"| CS2["Chat server 2"]
-    CS2 -->|"4. push newMessage"| B["Receiver app"]
-    CS1 -.->|"receiver offline"| PN["Push notification<br/>(FCM, APNs)"]
-    PN -.->|"wake up"| B
+    CS2 -->|"4. newMessage"| B["Receiver"]
+    CS1 -.->|"B offline"| PN["Push notification"]
+    CS1 -->|"group message"| Q["Queue + workers<br/>one copy per member"]
 ```
-
-1. **Connect:** On app open, the client opens a WebSocket to a chat server. The server records `user: server` in the connection registry.
-2. **Send:** The sender's chat server stores the message (durable first). It replies `messageAck` (one tick).
-3. **Route:** It looks up the receiver's server in the registry and forwards the message there.
-4. **Deliver:** The receiver's server pushes `newMessage`. The receiver replies `ackDelivered` (two ticks).
-5. **Offline:** If the receiver has no connection, the message stays in their inbox. A push notification wakes the phone. On reconnect, the app syncs the inbox.
-
-With this design, all FRs are satisfied.
-
-## Step 6: Deep dives
-
-### Deep dive 1: routing between chat servers
-
-The chat servers are **stateful**: each holds the open sockets of its users. The sender and receiver are usually on different servers.
-
-| Option | How | Trade-off |
-|--------|-----|-----------|
-| Direct forward | Look up the receiver's server in the registry. Call it directly. | Fast. The registry must stay correct as users reconnect. |
-| Pub/sub per user | Each server subscribes to a channel for each connected user (Redis pub/sub). The sender's server publishes to `user:B`. | Simple routing. Fire and forget: if B is reconnecting, the publish is lost, so the inbox is still the source of truth. |
-| Message queue + task runners | Put the message on a queue. Task runners look up the user's server and deliver. | Most robust. Retries are built in. Used for groups below. |
-
-- **Registry cleanup:** Each entry has a TTL. The server refreshes it with heartbeats. A dead server's entries expire.
-- **Inside a server:** Each server keeps a local map of `user_id: socket object` (a user-connection cache).
-
-### Deep dive 2: group messages and fan-out
-
-Every member of a group needs their own copy. This is **fan-out**.
-
-```mermaid
-flowchart LR
-    S["Sender"] -->|"group message"| SS["Send service"]
-    SS -->|"store once"| DB[("Message DB")]
-    SS -->|"message for group"| FW["Fan-out workers"]
-    GU[("Group-user mapping")] -->|"members of the group"| FW
-    FW -->|"one copy per member"| Q["Delivery queue"]
-    Q -->|"1. pull"| TR["Task runners"]
-    UM[("User-machine mapping")] -->|"2. which server holds the user"| TR
-    TR -->|"3. deliver"| RS["Receive service<br/>(holds the sockets)"]
-    RS -->|"push"| M["Group members"]
-    E["Member opening the app"] -->|"connect"| RS
-    RS -->|"register user and server"| UM
-```
-
-- **Send and receive split:** A send service takes writes. A receive service holds the connections. Each scales on its own.
-- **Store once:** The message body is stored once. Each member gets a small inbox entry that points to it.
-- **Fan-out workers:** They read the group's member list and put one delivery task per member on the queue.
-- **Task runners:** They look up the member's server and hand the message to it. If a member is offline, they trigger a push notification.
-- **Cost:** A 100-member group turns one message into 100 deliveries. That is why the member limit exists. Very large groups (channels) use fan-out on read: members pull new messages instead.
-
-### Deep dive 3: never losing a message
-
-- **Store first, then ack:** The server writes to the DB before it sends `messageAck`. If the server crashes before the ack, the client resends with the same `clientMessageId`.
-- **At-least-once delivery:** A message is removed from the inbox only after `ackDelivered`. A message may be delivered twice. The client drops duplicates by `messageId` (topic 13).
-- **Write once, deliver from the log:** Writing to the DB and to the queue as two steps can fail halfway. Fix: write only to the DB. Change data capture (CDC, topic 14) reads the DB's log and feeds the delivery queue.
-
-### Deep dive 4: ordering
-
-- **The server orders:** Clocks on phones cannot be trusted. The server gives each message an id that grows over time within a chat (Snowflake, topic 21, or a per-chat sequence number).
-- **Client sorts by id:** Even if two messages arrive out of order, the app shows them in id order.
-- **One partition per chat:** In the DB, all messages of a chat share one partition and are sorted by `message_id`. This also avoids the consistent prefix problem (topic 18).
-
-### Deep dive 5: storage
-
-The load is write-heavy and append-only. Use **Cassandra** (an LSM-tree store, topic 17).
-
-| Table | Partition key | Clustering key | Query |
-|-------|---------------|----------------|-------|
-| `messages` | `chat_id` | `message_id` (descending) | Latest messages of a chat |
-| `inbox` | `user_id` | `message_id` | Undelivered messages of a user |
-
-- **Replication:** n = 3 with quorum writes (topic 19). A message survives one node failing.
-- **Retention:** Delete delivered messages after 30 days (a TTL on the row).
-
-### Deep dive 6: media, presence and read receipts
-
-- **Media:** The client uploads the photo straight to blob storage with a presigned URL (topic 8). The message carries only the URL and a thumbnail.
-- **Presence (online, last seen):** The client sends a heartbeat every 30 s. Redis stores `user: last_seen` with a TTL. Contacts read it when they open the chat. Do not push presence to every contact on every change; it multiplies the load.
-- **Read receipts:** `markRead` updates the inbox status. A `statusUpdate` goes back to the sender through the same routing.
-
-### Does every part scale?
 
 | Part | How it scales |
 |------|---------------|
-| Chat (receive) servers | 500+ stateful servers behind an L4 LB. Scale by adding servers. Clients reconnect on failure. |
-| Connection registry | Redis cluster sharded by `user_id` |
-| Fan-out and delivery | Queue partitioned by `user_id`. Add workers and task runners. |
-| Message DB | Cassandra, partitioned by `chat_id`, add nodes for more capacity |
+| Chat servers | Add servers. Clients reconnect on failure. |
+| Registry | Redis cluster, sharded by `user_id` |
+| Group delivery | Add workers |
+| Message DB | Cassandra, add nodes |
 
-> **Interview:** The hard parts are routing between stateful servers and group fan-out. Say "WebSockets to chat servers, a Redis registry of user to server, store the message before the ack, at-least-once delivery with dedup by message id, and Cassandra partitioned by chat_id".
+> **Interview:** The hard parts are routing between stateful servers and group fan-out. Say "WebSockets, a Redis registry of user to server, store before ack, and Cassandra by chat_id".
+
+## Likely questions
+
+- **Why WebSocket, not SSE?** Both sides send at any time. SSE only pushes from the server.
+- **How does a message reach a user on another server?** Look up their server in the Redis registry, then forward.
+- **What if the receiver is offline?** The message waits in their inbox. A push notification wakes the phone.
+- **How do you avoid losing a message?** Store it before the ack. The client resends with the same id.
+- **Why Cassandra?** 2M writes per second, append only. It partitions by `chat_id`.
