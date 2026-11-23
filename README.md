@@ -7,3 +7,4 @@ filled in with everything extra the full lectures explain.
 - [Operating Systems](os/README.md)
 - [DBMS](dbms/README.md)
 - [Low Level Design](lld/README.md)
+- [High Level Design](hld/README.md)
