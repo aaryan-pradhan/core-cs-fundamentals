@@ -1,155 +1,54 @@
 # 8. REST APIs and Blob Storage
 
-## REST protocol
+The [client](01-why-system-design.md) calls the [server](01-why-system-design.md) through a REST API. Large files such as videos and PDFs do not belong on the app server or in the [database](01-why-system-design.md). They go to blob storage, and the database keeps only a small row about each file.
 
-The client talks to the server over HTTP using REST. Each request names a **method** and a **path**. The server replies with a **status code** and a body, usually JSON.
+## Key terms
 
-```mermaid
-flowchart LR
-    C["Client"] -->|"GET /count<br/>POST /increment"| LB["Load Balancer"]
-    LB -->|"forward"| A["App Server"]
-    A -->|"200 OK {count: 2}"| LB
-    LB -->|"200 OK {count: 2}"| C
-```
-
-| Method | Meaning | Example |
-|--------|---------|---------|
-| GET | Read a resource. No side effects. | `GET /count` |
-| POST | Create something or trigger an action | `POST /increment` |
-| PUT | Replace a resource | `PUT /users/42` |
-| PATCH | Change part of a resource | `PATCH /count` |
-| DELETE | Remove a resource | `DELETE /files/7` |
-
-| Status code | Meaning |
-|-------------|---------|
-| 200 OK | Success |
-| 201 Created | A new resource was made |
-| 204 No Content | Success with no body |
-| 301 / 302 | Redirect (permanent / temporary) |
-| 400 Bad Request | The input is wrong |
-| 401 Unauthorized | Not logged in |
-| 403 Forbidden | Logged in, but not allowed |
-| 404 Not Found | The resource does not exist |
-| 429 Too Many Requests | Rate limit hit |
-| 500 Internal Server Error | The server failed |
-
-## The problem: uploading a file through the app server
-
-A naive upload API puts the file inside the JSON body:
-
-```
-GET  /file/{name}
-POST /file
-body: {
-  "name": "study.pdf",
-  "data": "ksdhkf7983u2rnfkjsy89u23oif9y2oho...."   // 2 GB!
-}
-```
-
-The 2 GB travels from the client to the LB, then to the app server, then to the database. Every hop carries the full file. This bloats the servers and the DB.
-
-## Blob store
-
-A **blob store** (Binary Large OBject store) stores and returns large unstructured files as objects (blobs). Examples: images, videos, PDFs, audio, backups, ZIPs, ML datasets.
-
-| | Database | Blob store |
-|---|----------|------------|
-| Best for | Structured records and queries | Files |
-| Operations | Tables, indexes, joins | PUT object, GET object, DELETE object, LIST objects |
-| Examples | Postgres, MySQL | Amazon S3, Cloudflare R2, Google Cloud Storage (GCS) |
-
-- **Rule:** Store the file in the blob store. Store only its metadata (owner, key, size, type) in the DB.
-
-## Pre-signed URL
-
-A **pre-signed URL** is a link to one object in the blob store. It carries a signature and an expiry time. Anyone with the link can do one action (PUT or GET) on that one object until it expires.
-
-- **No network call:** The app server creates the URL in its own memory. It signs it with its cloud credentials. The blob store checks the signature later.
-- **Short life:** It is valid for a short time, for example 5 to 15 minutes.
-
-Example:
-
-```
-https://my-bucket.s3.ap-south-1.amazonaws.com/users/42/uploads/9f3c2b1e-resume.pdf
-?X-Amz-Algorithm=AWS4-HMAC-SHA256
-&X-Amz-Credential=AKIAIOSFODNN7EXAMPLE%2F20260205%2Fap-south-1%2Fs3%2Faws4_request
-&X-Amz-Date=20260205T120000Z
-&X-Amz-Expires=900
-&X-Amz-SignedHeaders=host%3Bcontent-type
-&X-Amz-Signature=0123456789abcdef...
-```
-
-| Part | Meaning |
+| Term | Meaning |
 |------|---------|
-| Path | The object key: `users/42/uploads/9f3c2b1e-resume.pdf` |
-| `X-Amz-Algorithm` | The signing algorithm |
-| `X-Amz-Credential` | Which access key signed it, the date, region and service |
-| `X-Amz-Date` | When it was signed |
-| `X-Amz-Expires` | Seconds it stays valid: 900 = 15 minutes |
-| `X-Amz-SignedHeaders` | Headers the request must match |
-| `X-Amz-Signature` | The signature the blob store verifies |
+| REST | REST is the usual way a client calls a server over HTTP. Each request names a method and a path, such as `GET /count`. The server replies with a status code and a body, usually JSON, a plain text format of keys and values. |
+| HTTP methods | GET reads a resource. POST creates one or starts an action. PUT replaces a resource, PATCH changes part of it, and DELETE removes it. |
+| Status codes | A status code is a number that tells the client how the request went. 200 means success, and 204 means success with no body. 301 and 302 are permanent and temporary redirects. 500 means the server failed. |
+| Blob storage | Blob (binary large object) storage keeps large files, such as images, videos, PDFs and backups, as objects. You can only PUT, GET, DELETE and LIST objects. |
+| S3 | Amazon S3 is the most common blob store. Cloudflare R2 and Google Cloud Storage are others. |
+| Object key | An object key is the path that names one file in the blob store, such as `users/42/resumes/uuid-resume.pdf`. |
+| Pre-signed URL | A pre-signed URL is a link to one object that carries a signature and an expiry time. Anyone with the link can do one action (PUT or GET) on that object until it expires. |
+| Metadata | Metadata is the small row about a file, such as its owner, key, size and type. |
 
-## Upload flow
+## How it works
 
-The file goes straight from the client to the blob store. It is uploaded only once.
+1. **The file travels through every server.** A naive `POST /file` puts a 2 GB file inside the JSON body. The bytes then pass through the [load balancer](04-performance-throughput-load-balancing.md), the app server and the database, and they bloat all three. The fix is to keep the file in blob storage and only its metadata in the database.
+2. **The client needs permission to write to the blob store.** The client calls `POST /uploads/init` with the file name, size and type. The backend checks that the user is logged in, that the size and type are allowed, and that the user is within quota.
+3. **The backend signs a URL.** The backend makes an object key and a pre-signed PUT URL that lives 5 to 15 minutes. It signs the URL in its own memory with its cloud credentials, so it makes no [network call](03-one-computer-and-latency.md) to the blob store. It returns `uploadUrl` and `objectKey`.
+4. **The client uploads only once.** The client sends the bytes straight to `uploadUrl`. The blob store checks the signature, stores the file and returns an ETag, which is a fingerprint of the stored file.
+5. **The database must learn about the file.** The client calls `POST /uploads/complete` with the key and the ETag. The backend saves the metadata row and returns a `fileId`.
+6. **The user wants the file back.** The client calls `GET /files/{fileId}/download`. The backend reads the metadata, checks that this user may read the file, and returns a pre-signed GET URL. The client then downloads the bytes straight from the blob store.
 
 ```mermaid
 flowchart LR
     C["Client"] -->|"1. POST /uploads/init"| A["App Server"]
     A -->|"2. uploadUrl + objectKey"| C
-    C -->|"3. PUT file bytes once<br/>(2 GB)"| S3[("Blob store (S3)")]
+    C -->|"3. PUT file bytes once"| S3[("Blob store (S3)")]
     C -->|"4. POST /uploads/complete"| A
-    A -->|"5. INSERT metadata"| D[("Database")]
+    A -->|"5. save metadata"| D[("Database")]
 ```
 
-```mermaid
-sequenceDiagram
-    actor U as User
-    participant F as Frontend (Browser)
-    participant B as Backend API
-    participant S as Blob Store (S3/R2/GCS)
-    participant D as Database (metadata)
-    U->>F: Select file (resume.pdf)
-    F->>B: POST /uploads/init {filename, size, contentType}
-    B->>B: Auth + validate (size, type, quota)
-    B->>B: Sign pre-signed PUT URL locally (key, expiry)
-    B-->>F: 200 {uploadUrl, objectKey}
-    F->>S: PUT uploadUrl (file bytes + Content-Type)
-    S-->>F: 200/204 OK (ETag)
-    F->>B: POST /uploads/complete {objectKey, etag}
-    B->>D: INSERT file metadata (user_id, key, size, type, etag)
-    D-->>B: OK
-    B-->>F: 200 {fileId}
-```
+## Trade-offs
 
-1. **Init:** The frontend calls `POST /uploads/init` with `filename`, `size` and `contentType`.
-2. **Auth and validate:** The backend checks: Is the user logged in? Are the file size and type allowed? Is the user within rate limits and quota?
-3. **Pre-signed PUT URL:** The backend makes an object key like `users/42/resumes/uuid-resume.pdf`. It creates a pre-signed URL valid for 5 to 15 minutes. It returns `uploadUrl`, `objectKey` and sometimes required headers.
-4. **Direct upload:** The frontend sends the bytes to `uploadUrl`. The blob store replies with an **ETag**, a fingerprint of the stored file.
-5. **Complete:** The frontend calls `POST /uploads/complete`. The backend saves the metadata row and returns `fileId`.
+| | Database | Blob storage |
+|---|----------|--------------|
+| Best for | It is best for structured records and queries. | It is best for large files. |
+| What you can do | You get tables, joins and [indexes](09-data-modelling.md), which find rows without a full scan. | You can only PUT, GET, DELETE and LIST objects. |
+| Examples | Postgres, MySQL | Amazon S3, Cloudflare R2, Google Cloud Storage |
 
-## Download flow
+**Numbers:** A pre-signed URL usually lives 5 to 15 minutes. In an S3 URL, `X-Amz-Expires=900` means 900 seconds, which is 15 minutes.
 
-```mermaid
-sequenceDiagram
-    actor U as User
-    participant F as Frontend (Browser)
-    participant B as Backend API
-    participant S as Blob Store (S3/R2/GCS)
-    participant D as Database (metadata)
-    U->>F: Click "Download"
-    F->>B: GET /files/{fileId}/download
-    B->>D: SELECT metadata WHERE id = fileId
-    D-->>B: {objectKey, owner, contentType, filename}
-    B->>B: AuthZ check (owner / ACL)
-    B->>B: Sign pre-signed GET URL locally (key, expiry, Content-Disposition)
-    B-->>F: 200 {downloadUrl}
-    F->>S: GET downloadUrl
-    S-->>F: 200 (file bytes)
-    F-->>U: Browser saves or opens the file
-```
+> **Interview:** Say "large files never pass through the app servers". Store them in S3 through pre-signed URLs, and keep only the metadata in the database.
 
-- **ACL:** Access control list. It says who may read the file.
-- **Content-Disposition:** A header that tells the browser to download the file and what to name it.
+## Likely questions
 
-> **Interview:** Never send large files through your app servers. Use a blob store with pre-signed URLs. Keep metadata in the DB.
+- **Why not store files in the database?** The database is built for structured records and queries. A 2 GB file would bloat the database and every server it passes through.
+- **What is a pre-signed URL?** It is a link to one object with a signature and an expiry. It lets the client do one PUT or GET straight on the blob store.
+- **Does making a pre-signed URL call S3?** No, it does not. The app server signs it in its own memory, and S3 checks the signature later.
+- **How does the database know the upload finished?** The client calls `POST /uploads/complete`. The backend then saves the metadata row.
+- **How does a download work?** The backend checks the user can read the file and returns a pre-signed GET URL. The client downloads straight from the blob store.
