@@ -61,6 +61,14 @@ These are revision notes. The reader has already studied the topic. They read a 
 - Render with `plantuml -tsvg dbms/img/src/*.puml -o ..`. `@startdot` needs Graphviz (`dot`) installed.
 - All other diagrams (flows, states, architectures) are Mermaid blocks in the note.
 
+### HLD notes only
+
+- No analogies at all. State the concept, the tech stack, and how it works.
+- Write so an undergraduate understands on the first read. Exhaustive, never dense.
+- One file per topic, in the order the sources teach it.
+- Architecture and flow diagrams are Mermaid flowcharts. Label every box and arrow.
+- Worked designs follow the handwritten notes' steps: FR, NFR, estimates, entities, APIs, HLD diagram, deep dives.
+
 ## 9. Do not add
 
 - No recall questions or quizzes.
