@@ -15,7 +15,7 @@
 - [Topic 13: Message Queues and Async Processing](13-message-queues.md)
 - [Topic 14: CAP Theorem](14-cap-theorem.md)
 - [Topic 15: Back-of-the-Envelope Estimation](15-estimation.md)
-- [Topic 16: The Interview Framework](16-interview-framework.md)
+- [Topic 16: The Design Rules](16-interview-framework.md)
 - [Topic 17: Storage Engines: Data Structures That Power Databases](17-storage-engines.md)
 - [Topic 18: Replication](18-replication.md)
 - [Topic 19: Leaderless Replication and Quorums](19-leaderless-replication.md)

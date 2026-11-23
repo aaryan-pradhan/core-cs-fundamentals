@@ -1,130 +1,100 @@
-# 16. The Interview Framework
+# 16. The Design Rules
 
-Every design in topics 22 to 30 follows the same six steps.
+Every design follows the same 7 steps, in the same order. Say each step's name out loud. Get the interviewer to agree on steps 1 to 3 before you draw.
 
-```mermaid
-flowchart LR
-    FR["1. FR<br/>minimal product flow"] -->|"then"| NFR["2. NFR<br/>CAP, DAU, RPS,<br/>storage, bandwidth, latency"]
-    NFR -->|"then"| E["3. Entities<br/>objects to store"]
-    E -->|"then"| API["4. APIs<br/>interface to the system"]
-    API -->|"then"| HLD["5. HLD<br/>boxes and arrows"]
-    HLD -->|"then"| DD["6. Iterations and deep dives<br/>improve, explain key pieces"]
-    DD -.->|"new need found"| HLD
-```
+| Step | Output |
+|------|--------|
+| 1. FR | 3 to 4 "User should be able to ..." lines, plus out of scope |
+| 2. NFR | CAP per flow, latency target |
+| 3. Estimates | Users per second, read and write QPS at peak, connections if real-time |
+| 4. Entities | Nouns of the FRs, with key fields |
+| 5. APIs | One endpoint per FR action |
+| 6. Basic diagram | Gateway, one service per FR, DB. "With this design, FRs are satisfied." |
+| 7. Problems | One problem at a time. Each fix exposes the next one. |
 
-| Step | Question it answers | Output |
-|------|---------------------|--------|
-| 1. FR | What must the product do? | 2 to 4 core requirements, plus "below the line" |
-| 2. NFR | How well must it do it? | CAP choice, DAU, read and write QPS, latency, storage, bandwidth |
-| 3. Entities | What do we store? | A list of entities with key fields |
-| 4. APIs | How do clients talk to it? | Endpoints with method, path, body and response |
-| 5. HLD | What are the parts? | A diagram that satisfies every FR |
-| 6. Deep dives | How does it meet the NFRs? | Changes to the diagram, one NFR at a time |
+## Step 1: FR
 
-## Step 1: Functional requirements
+- **Form:** "User should be able to ...". No implementation details.
+- **Count:** 3 to 4 core lines.
+- **Out of scope:** List what you will not design (payments, notifications, search...).
 
-Think of the minimal flow of the product (topic 2).
+## Step 2: NFR
 
-- **Core requirements:** Write them as "Users should be able to ...". Keep 2 to 4.
-- **Below the line (out of scope):** List what you will not design. This shows you know the product and keeps time for depth.
+- **CAP:** Pick per flow (topic 14). Money, booking, game state: consistency. Feeds, chat, views: availability.
+- **Latency:** One number for the main action. Example: "first token under 500 ms".
+- **Count:** 3 to 4 NFRs at most.
 
-Example (ChatGPT):
+## Step 3: Estimates
 
-| Core | Below the line |
-|------|----------------|
-| Users can send a prompt in a chat and get an AI response | Editing or branching messages |
-| Users can view past chats and resume one, with prior context | Image, audio and video. Sharing chats. Tools and web browsing. Search over history. |
+Use 1 day = 3600 × 24 ≈ 10^5 seconds.
 
-## Step 2: Non-functional requirements
+| Quantity | Formula | Example (Rapido) |
+|----------|---------|------------------|
+| Users per second | DAU / 10^5 | 10^8 / 10^5 = 1,000 |
+| Read QPS | users/s × reads per user × peak (5×) | 1,000 × 5 × 5 = 25K |
+| Write QPS | users/s × writes per user × peak (5×) | 1,000 × 2 × 5 = 10K |
+| Connections (real-time only) | concurrent users | chess: 500K games × 2 = 1M |
 
-Follow the order from topic 2. Use the formulas from topic 15.
+Then say what the numbers mean:
 
-1. **CAP:** Consistency or availability, with the product reason (topic 14).
-2. **DAU.**
-3. **Throughput:** Read and write QPS, the read to write ratio, peak QPS.
-4. **Latency:** A target for the main action, for example "first token under 500 ms".
-5. **Storage and bandwidth:** Only if the system stores or moves a lot.
+- **Reads much more than writes:** Read heavy. Cache and read replicas.
+- **Writes over about 5K per second:** One Postgres cannot take it. Use Redis, or shard.
+- **Many open connections:** Many stateful servers. Routing becomes a problem.
 
-Write each NFR as one sentence with a number. Example: "The system should prefer availability over consistency for chat state (99.9%+)."
+## Step 4: Entities
 
-## Step 3: Entities
+- **Rule:** Underline the nouns in the FRs. Each important noun is an entity.
+- **Fields:** Key fields only: id, owner, status, time.
 
-**Entities are the nouns of the FRs.** Underline the nouns in the core requirements. Each important noun becomes an entity.
+## Step 5: APIs
 
-"**Users** should be able to send a **prompt** in a **chat** and receive a **response**." This gives User, Chat and Message (a prompt and a response are both messages).
+- **One endpoint per FR action:** `POST` creates, `GET` reads, `PATCH` updates.
+- **Nouns, plural:** `/rides`, `/chats/{chatId}/messages`.
+- **User from the token:** Never put `userId` in the body. The gateway reads it from the JWT.
+- **Real-time apps:** Also list WebSocket messages, for example `sendMove {from, to}`.
 
-- **List key fields only:** id, owner, status, timestamps. A full schema is not needed yet.
-- **Note what matters later:** For example, the user's tier (free or paid) matters for scheduling.
+## Step 6: Basic diagram
 
-## Step 4: APIs
+- **Boxes:** Client, API gateway (auth, rate limit, TLS), one service per FR, DB.
+- **Walk it:** Trace each FR along the arrows.
+- **Close:** Say "with this design, FRs are satisfied". Keep it simple. Scaling is step 7.
 
-One endpoint per FR action, in REST (topic 8).
+## Step 7: Problems, one by one
 
-| Rule | Example |
-|------|---------|
-| Use nouns for resources, plural | `/chats`, `/messages` |
-| The method says the action | `POST` creates, `GET` reads, `PATCH` updates, `DELETE` removes |
-| Nest child resources | `POST /chats/{chatId}/messages` |
-| Return the created id | `POST /chats` returns `{ chatId }` |
-| Paginate lists with a cursor | `GET /chats?cursor={cursor}&limit={n}` |
-| Take the user from the auth token | Never put `userId` in the body. The gateway reads it from the JWT or session. |
-| Use correct status codes | `201` created, `404` missing, `429` rate limited |
+Ask of each box: "what breaks at our numbers?" Fix it. Then ask again.
 
-- **Cursor pagination:** The server returns a `cursor` (for example the last id seen). The next call passes it. This is keyset pagination (topic 12). It stays fast on page 1000, unlike `OFFSET`.
+| Problem | Standard fix |
+|---------|--------------|
+| One server cannot take the QPS | Stateless servers behind an LB (topic 4) |
+| Too many reads | Cache in Redis, read replicas (topics 10, 12) |
+| Too many writes or too much data | Shard the DB, with consistent hashing (topic 12) |
+| Client needs live updates | Polling, then SSE (server only pushes), then WebSocket (both ways) |
+| WebSocket servers are stateful | Registry of user to server, or pub/sub (topic 26) |
+| Slow or bursty work | Queue + worker pool. Queue full: return `429` (back pressure). |
+| Two users grab the same thing | Distributed lock, or a conditional update in the DB |
+| Hot cache key expires, everyone recomputes | Lock: one request recomputes, the rest wait (thundering herd, topic 11) |
+| Big files | Blob store, pre-signed URL, CDN (topics 8, 10) |
+| Server crashes and loses data | Write to the DB or a log before you reply |
 
-## Step 5: High-level design
+End with a table: each part, and how it scales.
 
-Go through the FRs one at a time. For each one, add only the boxes it needs. Then trace the request along the arrows.
+## Pushing updates to the client
 
-1. Start from the base pieces (topic 6): client, API gateway, load balancer, services, DB, cache, blob store, queue.
-2. Satisfy FR 1. Draw it. Walk through it.
-3. Satisfy FR 2 on the same diagram.
-4. Say "with this design, all FRs are satisfied". Then move to the NFRs.
+| Pattern | How | Direction | Use |
+|---------|-----|-----------|-----|
+| Short polling | Client calls `GET` every few seconds | Client asks | Rare updates. Wastes calls. |
+| SSE | One HTTP response stays open. Server writes events into it. | Server to client | Streaming tokens, live scores |
+| WebSocket | One connection, both sides send any time | Both ways | Chat, games, live location |
 
-Keep this design simple. Scaling comes in step 6.
+- **Polling cost:** A 30 s answer with 3 s polling needs 10 API calls.
+- **WebSocket cost:** The connection is stateful. Messages must be routed to the user's server.
 
-## Step 6: Iterations and deep dives
+> **Interview:** Name the step you are on. Satisfy the FRs first with a simple design. Spend the rest of the time on the problems.
 
-Take each NFR and ask "does the current design meet it?". If not, change the design.
+## Likely questions
 
-- **Check each element:** Can this box scale? Servers scale behind an LB. The DB scales with replicas and shards (topic 12). Add a cache for hot reads (topic 10).
-- **Find the hard part:** Every design has one or two. Real-time delivery for chat. Double booking for tickets. Matching for ride-hailing.
-- **Name trade-offs:** "SSE instead of WebSockets because the server only pushes, and SSE is plain HTTP".
-
-## Toolbox: pushing updates to the client
-
-Many designs must send data from the server to the client without the client asking each time.
-
-| Pattern | How | Direction | State on the server | Use |
-|---------|-----|-----------|---------------------|-----|
-| Short polling | The client calls `GET` every few seconds, for example every 3 s | Client asks | None | Simple, rare updates. Wastes many calls. |
-| Long polling | The client calls `GET`. The server holds it open until data exists or a timeout. Then the client calls again. | Client asks | Held request | Fallback when nothing else works |
-| SSE (Server-Sent Events) | One HTTP response stays open. The server writes events into it. An end marker closes it. | Server to client only | Light, plain HTTP | Streaming tokens, live scores, notifications |
-| WebSocket | One TCP connection upgraded from HTTP. Both sides send any time. | Both ways | Stateful connection | Chat, games, live location |
-
-```mermaid
-sequenceDiagram
-    participant C as Client
-    participant S as Server
-    Note over C,S: Short polling
-    C->>S: GET /updates
-    S-->>C: nothing yet
-    C->>S: GET /updates (3 s later)
-    S-->>C: new data
-    Note over C,S: SSE
-    C->>S: GET /stream
-    S-->>C: event 1
-    S-->>C: event 2
-    S-->>C: end
-    Note over C,S: WebSocket
-    C->>S: HTTP upgrade
-    S-->>C: 101 Switching Protocols
-    C->>S: message
-    S-->>C: message
-```
-
-- **Polling cost:** One chat answer can need 10 API calls with 3 s polling.
-- **WebSocket cost:** The connection is stateful. A user connected to server A cannot be served by server B. Scaling needs a way to route messages to the right server (topic 26).
-- **SSE limit:** The browser's `EventSource` API opens only `GET` requests. So the stream endpoint must be a `GET`.
-
-> **Interview:** Say the step you are on out loud. Get the interviewer to agree on FRs and NFRs before you draw. Satisfy the FRs first with a simple design. Use the rest of the time on deep dives.
+- **How do you start a design?** FRs, then NFRs, then estimates. Agree on them before drawing.
+- **How do you get QPS from DAU?** DAU / 10^5 gives users per second. Multiply by requests per user, then by 5 for peak.
+- **When do you need WebSockets?** When both sides send at any time (chat, games). If only the server pushes, use SSE.
+- **When do you add a queue?** When work is slow or bursty. Workers pull at their own rate.
+- **How do you stop two users booking the same thing?** A lock, or `UPDATE ... WHERE status = 'available'` and check the row count.
