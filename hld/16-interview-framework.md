@@ -25,7 +25,7 @@ Every design follows the same 7 steps, in the same order. An SDE-1 interview las
 
 ## Step 3: Estimates
 
-A day has 3600 × 24 seconds, which is about 10^5. Peak is the busiest time of day. Assume the peak is 5 times the average.
+Use the [estimation](15-estimation.md) steps: a day is about 10^5 seconds, and the peak is 5 times the average.
 
 | Quantity | Formula | Example (Rapido) |
 |----------|---------|------------------|
