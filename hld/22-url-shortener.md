@@ -54,7 +54,7 @@ The [API gateway](06-gateway-observability-maintainability.md) routes each reque
 
 **1. Two long URLs can hash to the same short code.** This is a collision, and the mapping must stay one to one. The fix is to check the DB first. If the code is taken, add a fixed string to the long URL and hash again, until the code is free.
 
-**2. Every check is a DB call.** With many collisions, the loop calls the DB again and again. The fix is a Bloom filter. A Bloom filter is an array of bits that tells, using little memory, that a code is surely not in the DB. Each code is hashed to a few bit positions, and those bits are set to 1. If any of a code's bits is 0, the code is surely free, so we skip the DB. If all are 1, the code may exist, so we check the DB.
+**2. Every check is a DB call.** With many collisions, the loop calls the DB again and again. The fix is a [Bloom filter](17-storage-engines.md), which tells with little memory that a code is surely not in the DB. Each code is hashed to a few bit positions, and those bits are set to 1. If any of a code's bits is 0, the code is surely free, so we skip the DB. If all are 1, the code may exist, so we check the DB.
 
 **3. The DB gets 50K reads per second.** The fix is a cache of short code to long URL in [Redis](07-storing-data-and-redis.md). On a miss, the server reads the DB and fills the cache ([cache-aside](11-cache-patterns-and-problems.md)). [Stateless](04-performance-throughput-load-balancing.md) servers sit behind a [load balancer](04-performance-throughput-load-balancing.md).
 
