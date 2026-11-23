@@ -46,7 +46,7 @@ This pattern is called cache-aside. Topic 11 covers it and the other cache patte
 
 - **Almost a database, but on RAM:** It stores data in memory.
 - **Extremely fast:** About 1 ms per operation.
-- **ACID properties available:** Single operations are atomic.
+- **Atomic operations:** Each single command (like `INCR`) runs fully or not at all.
 - **Ready-made data structures:** Strings, hashes, lists, sets and sorted sets.
 - **Can be scaled:** It runs as a cluster.
 
@@ -72,16 +72,18 @@ More users means more QPS. One server has a limit.
 | | Vertical scaling | Horizontal scaling |
 |---|------------------|--------------------|
 | What you do | Make one server bigger (more RAM, faster CPU) | Add more servers |
-| Example | 2 GB RAM handles 10 QPS. 4 GB RAM handles 20 QPS. | 10 servers handle 10 QPS each |
+| Example | 2 GB RAM handles 10 QPS. 4 GB RAM handles 20 QPS. | 10 servers at 10 QPS each handle 100 QPS |
 | Limit | A single machine has a ceiling. 1000 QPS would need about 200 GB RAM, which is very expensive. | Almost no ceiling |
 | Cost | Very high-spec machines cost a lot. Avoid relying on them. | Many reasonable machines are cheaper |
 | Extra need | Nothing | A load balancer in front |
+
+The QPS numbers here are toy numbers to show the idea.
 
 - **Global users:** Put servers near users, for example one in North America and one in Europe. Both still talk to the single DB in India.
 
 ## Load balancer
 
-A load balancer (LB) redirects traffic to multiple instances. The instances form a **target group**. It makes sure each server gets a fair share, for example 10 QPS each, so no single server gets 100 QPS.
+A load balancer (LB) forwards traffic to multiple instances. The instances form a **target group**. The LB gives each server a fair share, for example 10 QPS each. No single server gets all 100 QPS.
 
 ```mermaid
 flowchart LR
@@ -113,7 +115,7 @@ flowchart LR
 
 ## Stateless vs stateful servers
 
-If each app server keeps state in its own RAM, the copies diverge. App Server 1 holds `counter = 2` in RAM, and App Server 2 holds a different value.
+If each app server keeps the counter in its own RAM, the values drift apart. App Server 1 holds `counter = 2` in RAM, and App Server 2 holds a different value.
 
 | | Stateless server | Stateful server |
 |---|------------------|-----------------|
