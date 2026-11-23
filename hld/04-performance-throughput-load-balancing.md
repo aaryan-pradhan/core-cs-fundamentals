@@ -14,8 +14,6 @@ One server breaks as users grow. A cache fixes slow responses (latency). More se
 | Load balancer (LB) | Spreads requests across servers. Examples: AWS ELB, NGINX. |
 | Stateless server | Keeps no client data. Any server can serve any request. |
 | Stateful server | Keeps client data. That client must always reach the same server. |
-| Sticky session | The LB sends one user to the same server every time |
-| Data center | A building of servers. Big systems run several, in different regions. |
 
 ## How it works
 
@@ -40,24 +38,19 @@ flowchart LR
 
 ## Trade-offs
 
-| Option | Pick when | Cost |
-|--------|-----------|------|
-| Vertical scaling | Small load, quick fix | One machine has a ceiling. Big machines cost a lot. |
-| Horizontal scaling | Load keeps growing | Needs an LB and stateless servers |
-| Round robin LB | Requests cost about the same | A slow request or weak server still gets equal share |
-| Weighted round robin | Servers have different power | Weights are fixed. They ignore live load. |
-| Load-aware LB | Request costs vary a lot | LB needs live stats from each server |
-| Stateless servers | Almost always | Shared state must live in Redis or the DB |
-| Stateful servers | Speed needs in-memory state (chat sockets, games) | Hard to scale. Users must be routed to their server. |
+| Vertical scaling | Horizontal scaling |
+|------------------|--------------------|
+| One bigger server | More servers |
+| Has a ceiling. Big machines cost a lot. | Almost no ceiling |
+| No LB needed | Needs an LB and stateless servers |
 
-## Numbers
+**LB strategies:**
 
-| Thing | Rough value |
-|-------|-------------|
-| Redis operation | About 1 ms |
-| One 2-vCPU server, no DB call | 1,000 to 10,000 QPS |
-| One 2-vCPU server, one DB read per request | 200 to 1,500 QPS |
-| One 2-vCPU server, one DB write per request | 100 to 800 QPS |
+- **Round robin:** Server 1, 2, 3, then repeat.
+- **Weighted round robin:** A stronger server gets more requests.
+- **Load-aware:** Send to the least busy server.
+
+**Numbers:** A Redis read takes about 1 ms. One small server handles about 1,000 QPS.
 
 > **Interview:** Say "the app servers are stateless, so the LB can send any request anywhere". This is the base of horizontal scaling.
 
