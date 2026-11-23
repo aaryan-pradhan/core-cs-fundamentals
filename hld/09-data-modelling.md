@@ -45,12 +45,12 @@ flowchart LR
 | problems | problem_id, problem_statement, constraints, ... |
 | submissions | submission_id, problem_id, user_id, ... |
 
-- **Data integrity:** A submission cannot be made if the user does not exist in the users table. The DB enforces this with checks. There are different types of checks.
+- **Data integrity:** A submission cannot be made if the user does not exist in the users table. The DB enforces this with a foreign key: `submissions.user_id` must exist in `users`.
 
 **Switching later:**
 
-- **SQL to NoSQL:** Switching is practically not possible.
-- **NoSQL to SQL:** This makes more sense, once the structure is clear.
+- **Cost:** Switching is costly in both directions. Every query and every piece of data must move.
+- **NoSQL to SQL:** Easier once the data's structure is clear.
 
 ## Data models
 
@@ -114,8 +114,8 @@ erDiagram
         timestamp created_at
     }
     LIKES {
-        bigint user_id FK
-        bigint post_id FK
+        bigint user_id PK, FK
+        bigint post_id PK, FK
         timestamp created_at
     }
 ```
@@ -141,11 +141,11 @@ erDiagram
 2. Denormalize only for a real read bottleneck.
 3. Prefer a cache or a precomputed (materialized) view over duplicating the truth everywhere.
 
-- **Materialized view:** A stored query result that the DB refreshes. Reads hit it directly.
+- **Materialized view:** A stored query result. It is refreshed on a schedule or on demand. Reads hit it directly.
 
 ## Scaling notes
 
-SQL scales with read replicas, caching and sharding by access pattern. Topic 12 covers each one.
+SQL scales with read replicas, caching and sharding by access pattern. Topic 12 covers replicas and sharding. Topics 10 and 11 cover caching.
 
 ```mermaid
 flowchart LR
@@ -154,8 +154,10 @@ flowchart LR
     APP -->|"hot reads"| C[("Cache")]
     P -->|"copies changes"| RR
     P -->|"too big?"| SH["Sharding"]
-    SH -->|"user_id range 1"| S1[("Shard 1")]
-    SH -->|"user_id range 2"| S2[("Shard 2")]
+    SH -->|"user_id % 4 = 0"| S1[("DB 0")]
+    SH -->|"user_id % 4 = 1"| S2[("DB 1")]
 ```
 
-- **Sharding example:** With `user_id % 4`, a remainder of 0 sends the row to DB 1, 1 to DB 2, and so on. No single server scales forever. Many reasonable DB servers cost less than one huge one.
+- **Sharding example:** With `user_id % 4`, remainder 0 goes to DB 0, remainder 1 to DB 1, and so on up to DB 3. No single server scales forever. Many reasonable DB servers cost less than one huge one.
+
+> **Interview:** Pick the database from the access pattern. Say why (joins and transactions for SQL, scale and flexible schema for NoSQL). Start normalized, then denormalize only for a measured read bottleneck.
