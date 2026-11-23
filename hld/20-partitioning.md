@@ -1,151 +1,71 @@
 # 20. Partitioning
 
-**Partitioning** (sharding, topic 12) splits the data so that each machine stores a different part. The union of all parts is the full dataset.
+Partitioning splits the data so that each machine stores a different part, and all parts together form the full dataset. It is the same idea as [sharding](12-scaling-databases.md). Replication copies all data to every machine, while partitioning gives each machine a different part.
 
-| | Replication | Partitioning |
-|---|-------------|--------------|
-| Each machine stores | The complete data | A different part of the data |
-| Goal | Availability, read scale | Data and load too big for one machine |
+## Key terms
 
-**Example:** 10^9 user ids over 10^3 machines. Machine 1 holds ids 1 to 10^6. Machine 2 holds 10^6 to 2 × 10^6. And so on.
+| Term | Meaning |
+|------|---------|
+| Partitioning | Partitioning splits the data so that each machine stores a different part. |
+| Range partitioning | Range partitioning gives each partition a continuous range of keys, such as names starting with A or B. |
+| Hash partitioning | Hash partitioning uses hash(key) to pick the partition, so keys spread evenly. |
+| Consistent hashing | Consistent hashing puts nodes and keys on a ring, so adding a node moves only the keys in one arc. |
+| Hot spot | A hot spot is a partition that gets far more data or load than the others. |
+| Secondary index | A secondary index finds rows by a column other than the primary key, such as batch. |
 
-**Motivation:**
+## How it works
 
-- **Too much for one machine:** One machine cannot store or process the whole dataset.
-- **Not perfect:** A perfectly even partition is not possible. Some partitions get more data or load. A partition with far more load is a **hot spot**.
-
-## Partitioning + replication
-
-They are used together. Each partition is replicated on several nodes. Each node holds several partitions. A node can lead some partitions and follow others.
+1. **One machine cannot hold or process all the data.** Split it. For example, 10^9 user ids over 10^3 machines gives each machine 10^6 ids.
+2. **A partition can be lost when its machine fails.** Use partitioning with [replication](18-replication.md). Each partition is copied to several nodes, and each node holds several partitions.
+3. **Keys must be split fairly.** Use range or hash partitioning, compared below. A perfect split is not possible, so a hot spot can appear. With ranges on `created_at`, the newest partition takes almost all traffic.
+4. **A query by a non-key column hits every partition.** "All students in batch AZ2" needs a global secondary index, which is partitioned by batch. New student 9 in batch AZ2 then touches two partitions: partition 1 stores row 9, and partition 2 stores the AZ2 index entry. A distributed transaction updates both together, which is consistent but slower. An async update is faster, but the index is stale for a while. Reads by batch go to one partition, so they are fast.
+5. **Data grows and nodes join or fail.** Partitions must move, and the goal is to move as little data as possible. Changing `hash(key) % 10` to `hash(key) % 15` moves almost every key, so use consistent hashing instead. Topic 12 shows the ring and virtual nodes.
+6. **A client must find the node that holds key K.** Use one of three routing approaches, compared below.
 
 ```mermaid
 flowchart LR
     subgraph N1["Node 1"]
-        A1["P1 (leader)"]
-        A2["P2 (follower)"]
-        A3["P3 (follower)"]
+        A1["P1"]
+        A2["P2"]
+        A3["P3"]
     end
     subgraph N2["Node 2"]
-        B2["P2 (leader)"]
-        B1["P1 (follower)"]
-        B3["P3 (follower)"]
+        B1["P1"]
+        B2["P2"]
+        B3["P3"]
     end
-    subgraph N3["Node 3"]
-        C3["P3 (leader)"]
-        C1["P1 (follower)"]
-        C2["P2 (follower)"]
-    end
-    A1 -->|"replicate"| B1
-    A1 -->|"replicate"| C1
-    B2 -->|"replicate"| A2
-    C3 -->|"replicate"| A3
+    A1 -->|"copy"| B1
+    A2 -->|"copy"| B2
+    A3 -->|"copy"| B3
 ```
 
-## How to split the keys
+## Trade-offs
 
-| Method | How | Range queries | Hot spots |
-|--------|-----|---------------|-----------|
-| Key range | Each partition owns a continuous range of keys | Efficient: you know which partitions to query | Likely, if many keys fall in one range |
-| Hash of key | `hash(key)` decides the partition | Lost: neighbouring keys land on different partitions | Rare: keys spread evenly |
+| | Range partitioning | Hash partitioning |
+|---|--------------------|-------------------|
+| Example | P1 holds A and B, P2 holds C to E, and P3 holds F. | hash(user_id) picks the partition. |
+| Range query | It is efficient, because you know which partitions to ask. Keys stay sorted inside each partition. | It is lost, because nearby keys land on different partitions. |
+| Hot spots | They are likely when many keys fall in one range. | They are rare, because keys spread evenly. |
 
-**Key range example:** Keys are names from A to Z.
+| Rebalancing | How it works | Cost |
+|-------------|--------------|------|
+| Fixed number of partitions | Create many more partitions than nodes, and move whole partitions to a new node. Stronger nodes hold more partitions. | Too many partitions means a lot of metadata. Too few means load cannot spread evenly. |
+| Dynamic partitioning | Split a partition that grows too big, and merge one that shrinks. The count can also grow with the number of nodes. | The DB must stay up during splits and merges. |
 
-| Partition | Keys starting with |
-|-----------|--------------------|
-| P1 | A, B |
-| P2 | C, D, E |
-| P3 | F |
+| Routing | How it works | Cost |
+|---------|--------------|------|
+| Any node | The client asks any node. That node has the metadata and forwards the request to the owner. Nodes share metadata by broadcasting to each other. | It adds one extra hop. |
+| Routing tier | A ZooKeeper service stores the latest partition map and routes the request. This is service discovery. | ZooKeeper is one more system to run. |
+| Partition-aware client | The client knows the hash and the map, so it contacts the right node directly. | It is a bad idea, because every client must track metadata. |
 
-- **Range query:** "All names starting with A" goes only to P1.
-- **Sorted inside:** Each partition can keep its keys sorted (topic 17).
-- **Uneven ranges:** The ranges are not equal in size, because data is not spread evenly across letters.
+**Numbers:** 10^9 ids over 10^3 machines gives 10^6 ids per machine. In the source, Node 0 has 10 GB RAM and holds 4 partitions, while Node 1 has 1 GB RAM and holds 2.
 
-Topic 12 shows the hot-shard problem with `created_at` ranges and the hash method.
+> **Interview:** Name the partition key and say why it spreads load evenly. Then say "consistent hashing moves only a few keys when a node joins".
 
-## Secondary indexes
+## Likely questions
 
-Partitioning by primary key works for lookups by primary key. But a query like "all students in batch AZ2" needs a **secondary index** on `batch`.
-
-### Global secondary index
-
-The index on `batch` is itself partitioned, by `batch`, not by student id.
-
-| Partition | Students (by id) | Index entries (by batch) |
-|-----------|------------------|--------------------------|
-| 1 | 1, 3, 8 | AZ1: {1, 3}, AZ5: {8} |
-| 2 | 2, 4, 5, 6, 7 | AZ2: {2, 4, 6}, AZ3: {5, 7} |
-
-A new student 9 in batch AZ2 arrives.
-
-```mermaid
-flowchart LR
-    W["INSERT student 9,<br/>batch AZ2"] -->|"by primary key"| P1[("Partition 1<br/>stores row 9")]
-    W -->|"by batch index"| P2[("Partition 2<br/>AZ2: {2, 4, 6, 9}")]
-```
-
-- **One write, two partitions:** By primary key, row 9 goes to partition 1. By batch, the index entry AZ2 lives on partition 2.
-- **Option 1, distributed transaction:** Update both partitions together (two-phase commit, topic 14). Always consistent, but slower writes.
-- **Option 2, asynchronous:** Update the primary partition now. Update the index later. Faster, but the index is stale for a while.
-- **Benefit:** Reads by batch go to one partition. Faster reads.
-
-### Local secondary index
-
-Each partition indexes only its own rows. Writes touch one partition. But a query by batch must ask every partition and combine the answers (**scatter-gather**). Reads are slower.
-
-| | Local index | Global index |
-|---|-------------|--------------|
-| Write | One partition | Several partitions (transaction or async) |
-| Read by secondary key | All partitions (scatter-gather) | One partition |
-| Example | MongoDB, Cassandra | DynamoDB global secondary indexes |
-
-## Rebalancing partitions
-
-Data grows, load shifts, and nodes are added or fail. Partitions must move between nodes. **Goal: move as little data as possible.**
-
-### Do not use hash mod N
-
-Going from `hash(key) % 10` to `hash(key) % 15` moves almost every key. Use consistent hashing instead (topic 12).
-
-### Fixed number of partitions
-
-Create many more partitions than nodes, for example 100 partitions for 10 nodes. Each node holds several. A new node takes a few whole partitions from the others. Keys never move between partitions. Only whole partitions move between nodes.
-
-**Uneven hardware:** Give stronger nodes more partitions.
-
-| Node | Hardware | Partitions |
-|------|----------|------------|
-| Node 0 | 10 GB RAM, 10× CPU | P2, P7, P8, P9 |
-| Node 1 | 1 GB RAM, 1× CPU | P0, P5 |
-
-- **Too many partitions:** Each one needs metadata. Very many partitions means a lot of metadata to keep. Not good practice.
-- **Too few partitions:** You lose the chance to spread load evenly.
-
-### Dynamic partitioning
-
-Increase the number of partitions with the load. A partition that grows too big is split in two. A partition that shrinks is merged with a neighbour. The DB must stay up during splits and merges.
-
-- **Variant:** Keep the number of partitions proportional to the number of nodes.
-
-## Request routing
-
-How does a client know which node holds key K?
-
-| Approach | How | Trade-off |
-|----------|-----|-----------|
-| 1. Any node | The client contacts any node. That node has the metadata. If it does not own K, it forwards the request to the right node, and the answer goes back. Nodes share metadata with each other (member broadcasting, gossip). | No extra service. One extra hop. |
-| 2. Routing tier | A routing service (backed by ZooKeeper) knows the partition map. The client asks it. ZooKeeper stores all the partitioning metadata and always keeps the latest. This is service discovery. | Clean. ZooKeeper is another system to run. |
-| 3. Partition-aware client | The client knows the hash function and the map. It contacts the right node directly. | Fastest. Bad idea in general: every client must track metadata. |
-
-```mermaid
-flowchart LR
-    C1["Client"] -->|"1. any node"| N1[("Node 1<br/>has metadata")]
-    N1 -->|"forward"| N3[("Node 3<br/>owns key")]
-    N3 -->|"response"| N1
-    C2["Client"] -->|"2. ask router"| ZK["Routing tier<br/>(ZooKeeper: partition map)"]
-    ZK -->|"route"| N3
-    C3["Client"] -->|"3. knows the map"| N3
-```
-
-- **ZooKeeper:** A coordination service. Nodes register with it. When partitions move, it updates the map and notifies the routers. Kafka and HBase use it. Cassandra uses gossip (approach 1).
-
-> **Interview:** Name the partition key and say why it spreads load. Say how a secondary-key query is served (global or local index). Say how partitions rebalance (consistent hashing or a fixed number of partitions) and how requests are routed.
+- **Range or hash partitioning?** Use range when you need range queries. Use hash for even load.
+- **What is a hot spot?** It is a partition with far more load than the others, such as the newest month under `created_at` ranges.
+- **Why not use hash mod N?** Changing N moves almost every key. Consistent hashing moves only the keys in one arc.
+- **How is a query by a secondary key served?** A global index partitioned by that key serves it from one partition. Writes then update two partitions, by transaction or asynchronously.
+- **How does a client find the right node?** It asks any node, a routing tier such as ZooKeeper, or it knows the map itself.
