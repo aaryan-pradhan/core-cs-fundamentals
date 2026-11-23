@@ -16,7 +16,7 @@ The same problem appears in real products.
 | JioHotstar live stream | Live views (50.3 crore) |
 | YouTube video | Likes (13K) and dislikes (122K) |
 
-YouTube once hid the public dislike count. The goal was to reduce "dislike attacks", where many users dislike one video together.
+In 2021, YouTube hid the public dislike count. The goal was to reduce "dislike attacks", where many users dislike one video together.
 
 ## How the app is built
 
@@ -60,7 +60,7 @@ flowchart LR
    });
    ```
 
-   - **Errors:** Each route catches errors and returns `500` with the error message.
+   - **Errors:** The full code wraps each route in `try/catch`. On an error, it returns `500` with the error message.
 
 3. **Database (MongoDB with Mongoose):**
    - **Schema:** One field, `count`, of type Number with default 0.
@@ -101,12 +101,12 @@ Anyone who learns development can build this app and run it on a PC. The levels 
 
 ## What a junior engineer sees
 
-A junior engineer sees the data flow.
+A junior engineer sees the data flow. From here on, the endpoints are written as `GET /counter` and `POST /increment`. They do the same job as `GET /count` and `PATCH /count` above.
 
 ```mermaid
 flowchart LR
     C["Client"] -->|"1. GET /counter"| S["Server"]
-    S -->|"2. SELECT * FROM counter"| D[("Database<br/>counter = 2")]
+    S -->|"2. read the counter"| D[("Database<br/>counter = 2")]
     D -->|"3. returns count"| S
     S -->|"4. sends count to show"| C
 ```
@@ -140,8 +140,8 @@ A senior engineer also asks the **right questions**.
 | Level | DSA | Development | HLD |
 |-------|-----|-------------|-----|
 | Level 1 | Learn a language | HTML, CSS, JS, Git | Concepts in these notes |
-| Level 2 | Solve 200 to 400 LeetCode problems on different topics | One full-stack understanding with common concepts | Tactics and concepts used in industry (partly covered) |
-| Level 3 | Learn frameworks, forms and tactics | Cloud deployment, Docker, speed | Standard books like DDIA (Designing Data-Intensive Applications) |
+| Level 2 | Solve 200 to 400 LeetCode problems on different topics | Build one full-stack app end to end | Tactics and concepts used in industry |
+| Level 3 | Learn problem patterns and tactics | Cloud deployment, Docker, performance tuning | Standard books like DDIA (Designing Data-Intensive Applications) |
 | Level 4 | Prepare for ICPC | GSoC, Kubernetes (K8s) | Deep dives into real technologies |
 
 - **Level 3 and 4 topics:** You are not expected to know storage engine internals or deep database tuning before level 3 or 4.
