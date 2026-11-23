@@ -110,10 +110,9 @@ sequenceDiagram
     participant S as Blob Store (S3/R2/GCS)
     participant D as Database (metadata)
     U->>F: Select file (resume.pdf)
-    F->>B: POST /uploads/init {name, size, contentType}
+    F->>B: POST /uploads/init {filename, size, contentType}
     B->>B: Auth + validate (size, type, quota)
-    B->>S: Create pre-signed PUT URL (key, expiry)
-    S-->>B: preSignedPutUrl + objectKey
+    B->>B: Sign pre-signed PUT URL locally (key, expiry)
     B-->>F: 200 {uploadUrl, objectKey}
     F->>S: PUT uploadUrl (file bytes + Content-Type)
     S-->>F: 200/204 OK (ETag)
@@ -143,8 +142,7 @@ sequenceDiagram
     B->>D: SELECT metadata WHERE id = fileId
     D-->>B: {objectKey, owner, contentType, filename}
     B->>B: AuthZ check (owner / ACL)
-    B->>S: Create pre-signed GET URL (key, expiry, Content-Disposition)
-    S-->>B: preSignedGetUrl
+    B->>B: Sign pre-signed GET URL locally (key, expiry, Content-Disposition)
     B-->>F: 200 {downloadUrl}
     F->>S: GET downloadUrl
     S-->>F: 200 (file bytes)
