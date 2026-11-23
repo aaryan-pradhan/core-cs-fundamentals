@@ -1,5 +1,12 @@
 # 11. Cache Patterns and Cache Problems
 
+## When to use caching
+
+- **Read-heavy workload:** Focus on data that is read frequently.
+- **High database CPU:** The data is expensive to fetch or compute.
+- **Static files:** Use a CDN.
+- **Extremely hot keys (rare):** In-process caching can make sense.
+
 ## Caching architectures
 
 ### 1. Cache-aside (lazy loading)
