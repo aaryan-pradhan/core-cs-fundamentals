@@ -7,10 +7,10 @@ Caching comes up almost every time a system has high read traffic. The database 
 | Read from | Typical latency |
 |-----------|-----------------|
 | Redis (RAM) | about 1 ms |
-| Database (disk) | about 50 to 100 ms |
+| Database (disk) | about 5 to 100 ms, depending on the query and disk |
 
 - **Cache:** A fast store that holds copies of data. If a request was already processed, return the stored response. Do not process it again.
-- **Cheaper storage per read:** Serving a read from the cache costs less than serving it from the DB.
+- **Cheaper per read:** A read from the cache costs less than a read from the DB.
 - **What to cache:** Data that is read often and changes rarely.
 
 Caches live in four places. Each is described below.
@@ -21,12 +21,12 @@ flowchart LR
     CDN -->|"miss"| LB["Load Balancer"]
     LB -->|"route"| A["App Server<br/>(in-process cache)"]
     A -->|"1 ms"| R[("Redis<br/>(external cache)")]
-    A -->|"50 to 100 ms"| D[("Database")]
+    A -->|"5 to 100 ms"| D[("Database")]
 ```
 
 ## 1. External caching
 
-A separate cache server, such as Redis, shared by all app servers. This is what the Live Counter uses (topic 4).
+External caching uses a separate cache server, such as Redis. All app servers share it. The Live Counter uses this (topic 4).
 
 ```mermaid
 flowchart LR
@@ -73,9 +73,10 @@ That is a 10x difference. A CDN also reduces bandwidth on the origin.
 ```mermaid
 flowchart LR
     U["User<br/>(example.com)"] -->|"1. request object"| E["Edge Location"]
-    E -->|"3c. object (cache hit)"| U
-    E -->|"2. not cached?<br/>request from origin"| O[("3a. Amazon S3 or<br/>HTTP origin server")]
-    O -->|"3b. object"| E
+    E -->|"2a. cache hit: object"| U
+    E -->|"2b. miss: request from origin"| O[("Amazon S3 or<br/>HTTP origin server")]
+    O -->|"3. object"| E
+    E -->|"4. store, then return object"| U
 ```
 
 1. The user asks the nearest edge location for the object.
@@ -108,7 +109,7 @@ CloudFront also has **regional edge caches** between the edge locations and the 
 
 ### Other benefits
 
-- **TLS at the edge:** The TLS handshake (like the TCP handshake, but for security) happens with the nearby edge. This saves round trips.
+- **TLS at the edge:** The TLS handshake (topic 3) takes several round trips. It happens with the nearby edge, so each round trip is short.
 - **Availability:** Many edges, with load balancing across them. If one fails, another serves.
 
 > **Interview:** The safest time to add a CDN is when the system serves static media at scale.
@@ -127,6 +128,9 @@ The app server keeps small data in its own memory. Reading local memory is much 
 Python's `functools.lru_cache` is an example:
 
 ```python
+import urllib.request, urllib.error
+from functools import lru_cache
+
 @lru_cache(maxsize=32)
 def get_pep(num):
     'Retrieve text of a Python Enhancement Proposal'
@@ -136,7 +140,9 @@ def get_pep(num):
             return s.read()
     except urllib.error.HTTPError:
         return 'Not Found'
+```
 
+```python
 >>> for n in 8, 290, 308, 320, 8, 218, 320, 279, 289, 320, 9991:
 ...     pep = get_pep(n)
 ...     print(n, len(pep))
@@ -145,7 +151,7 @@ def get_pep(num):
 CacheInfo(hits=3, misses=8, maxsize=32, currsize=8)
 ```
 
-Adding one line turns recursion into dynamic programming:
+Adding one line stores each result (memoization). Plain recursion becomes top-down dynamic programming:
 
 ```python
 @lru_cache(maxsize=None)
@@ -171,9 +177,9 @@ CacheInfo(hits=28, misses=16, maxsize=None, currsize=16)
 
 ## Comparison
 
-| Layer | Where | Speed | Shared by all servers? | Best for |
+| Layer | Where | Speed | Shared by | Best for |
 |-------|-------|-------|------------------------|----------|
-| Client-side | User's device | Fastest, no network | No | Offline apps, user's own data |
-| CDN | Edge servers near users | 25 to 35 ms | Yes, per region | Static media |
-| In-process | App server RAM | Nanoseconds | No | Config, flags, small hot data |
-| External | Redis cluster | about 1 ms | Yes | Shared hot data, sessions, counters |
+| Client-side | User's device | Fastest, no network | One user | Offline apps, user's own data |
+| CDN | Edge servers near users | 25 to 35 ms | Users near one edge | Static media |
+| In-process | App server RAM | Nanoseconds | One app server | Config, flags, small hot data |
+| External | Redis cluster | about 1 ms | All app servers | Shared hot data, sessions, counters |
