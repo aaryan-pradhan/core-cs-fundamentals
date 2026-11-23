@@ -1,211 +1,87 @@
 # 23. Design ChatGPT
 
-A chat app where a user sends a prompt and an LLM streams back a response, token by token.
+A user sends a prompt in a chat, and an LLM writes the answer. An LLM (large language model) is the AI model that writes text. It writes the answer one token at a time, and a token is a small piece of text, about one word.
 
-## Step 1: Functional requirements
+## Step 1: FR
 
-| Core | Below the line (out of scope) |
-|------|-------------------------------|
-| Users can send a prompt in a chat and receive an AI-generated response | Editing or branching existing messages |
-| Users can view past chats and resume a conversation, with the chat's prior context carried into the prompt | Image, audio or video input and output (text only) |
-| | Sharing chats or collaborating with other users |
-| | Custom GPTs, tool or function calling, web browsing |
-| | Full-text search across a user's chat history |
-| | Auth and user memory (assume the gateway handles auth) |
+- User should be able to start a new chat.
+- User should be able to send a message and get the AI response.
+- User should be able to open an older chat and continue it.
 
-## Step 2: Non-functional requirements
+Image generation, branching and sharing chats, image or voice input, and user memory are out of scope.
 
-| NFR | Target |
-|-----|--------|
-| Latency | Time to first token under about 500 ms. Then smooth, continuous streaming. A full response can take up to about 30 s. |
-| CAP | AP. Availability over strong consistency for chat state (99.9%+). Better to return an error or a degraded answer than to block the system on perfectly synced chat state. |
-| Durability | A finished message must never be lost |
-| Scale | 200 million DAU. About 20,000 prompts per second at peak. About 120,000 concurrent in-flight streams. |
-| Capacity | GPU-constrained. Fair allocation across free and paid tiers. |
+## Step 2: NFR
 
-### Estimation
+- **CAP:** We choose AP ([CAP](14-cap-theorem.md)). The chat must keep working, and a chat list that is a moment old is fine.
+- **Latency:** The first token reaches the user in under 500 ms. After that, tokens arrive at a steady rate.
+
+## Step 3: Estimates
 
 | Quantity | Calculation | Result |
 |----------|-------------|--------|
-| Prompts per day | 200M DAU × 5 prompts | 10^9 |
-| Average prompts per second | 10^9 / 10^5 s | 10,000 |
-| Peak prompts per second | 2 × average | 20,000 |
-| Message writes at peak | Each prompt writes 2 messages (prompt and response) | 40,000 per second |
-| Concurrent streams | 20,000 per second × about 6 s per stream | 120,000 |
-| Storage per day | 2 × 10^9 messages × 2 KB | 4 TB |
-| Storage for 5 years | 4 TB × 365 × 5 | About 7 PB |
-| Streaming bandwidth | 20,000 × 2 KB per second | About 40 MB/s |
+| DAU | | 200 million (2 × 10^8) |
+| Users per second | 2 × 10^8 / 10^5 | 2,000 |
+| Write QPS at peak | 2,000 × 50 prompts × 5 | 500K per second |
+| Read QPS at peak | Each response is read about once. | 500K per second |
 
-- **Concurrent streams:** In-flight count = arrival rate × time each one stays open.
-- **Read to write ratio:** For normal chatting it is about 1 : 1. If users often reopen old chats, it becomes read-heavy.
-- **Heavier estimate:** The handwritten notes assume 100 messages per user per day. That gives about 100K writes per second and a 500K QPS peak to ingest. State your assumption out loud.
+Reads and writes are about equal, 1 : 1. If users often reopen old chats, the system becomes read heavy. 500K writes per second is far more than one Postgres server can take.
 
-## Step 3: Entities
+## Step 4: Entities
 
-The nouns of the FRs: **users**, **prompt**, **response**, **chats**.
+| Entity | Key fields |
+|--------|------------|
+| User | `id`, `name` |
+| Chat | `id`, `user_id`, `name`, `state` (active or not) |
+| Message | `id`, `chat_id`, `role` (user or model), `content`, `token_usage`, `model_name`, `created_at` |
 
-| Entity | Key fields | Note |
-|--------|------------|------|
-| User | `id`, `tier` (free or paid) | The tier matters for fairness and scheduling |
-| Chat | `id`, `user_id`, `title`, `state` (active or not), `created_at`, `updated_at` | One conversation thread. Belongs to one user. Groups an ordered sequence of messages. |
-| Message | `id`, `chat_id`, `role` (user or assistant), `content`, `token_count`, `model_name`, `created_at` | One turn. A prompt and a response are both messages. |
-| Run (generation) | `run_id`, `chat_id`, `status` (queued, running, done, cancelled, failed) | One in-flight response. The client uses it to follow the stream. |
+## Step 5: APIs
 
-## Step 4: APIs
+- `POST /chats` starts a chat and returns `{chatId}`.
+- `POST /chats/{chatId}/messages {content}` sends a prompt and returns `{runId}`. A run ID names the one answer that is being written.
+- `GET /chats/{chatId}/messages` returns the messages of an older chat, so the user can continue it.
 
-| Purpose | API | Response |
-|---------|-----|----------|
-| Start a new chat | `POST /chats`, body `{}` | `{ chatId }` |
-| Send a prompt | `POST /chats/{chatId}/messages`, body `{ content }` | `{ runId }` |
-| Follow the response | `GET /chats/{chatId}/runs/{runId}/stream` | Message tokens over SSE |
-| Stop generating | `POST /chats/{chatId}/runs/{runId}/cancel` | `202 Accepted` |
-| List chats (sidebar) | `GET /chats?cursor={cursor}&limit={n}` | `Chat[]` |
-| Load one chat | `GET /chats/{chatId}/messages?cursor={cursor}&limit={n}` | `Message[]` |
-
-- **POST for messages:** It creates a new Message and starts the model response on the server.
-- **`runId`:** A handle for the in-flight response. Sending and streaming are split into two calls.
-- **GET for the stream:** The browser's `EventSource` API only opens GET requests (topic 16).
-- **Cursor pagination:** A heavy user can have thousands of chats. A long chat can have thousands of messages.
-
-## Step 5: High-level design
-
-### FR 1: send a prompt and get a response
+## Step 6: Basic diagram
 
 ```mermaid
 flowchart LR
-    U["User"] -->|"HTTPS"| GW["API gateway<br/>auth, rate limit,<br/>security, TLS"]
+    U["User"] -->|"send prompt"| GW["API gateway"]
     GW -->|"route"| LB["Load balancer"]
-    LB -->|"route"| CS["Chat service<br/>(many servers)"]
-    CS -->|"1. create chat and message"| DB[("Database")]
-    CS -->|"2. send prompt + context"| LLM["Inference server<br/>or external LLM API"]
-    LLM -->|"3. response"| CS
-    CS -->|"4. save response first"| DB
-    CS -->|"5. send response"| U
+    LB -->|"forward"| CB["Chat backend"]
+    CB -->|"store chat and message"| DB[("DB")]
+    CB -->|"prompt"| LLM["Inference server (LLM)"]
+    LLM -->|"response"| CB
 ```
 
-1. The gateway checks auth, rate limits, security and terminates TLS (topic 6).
-2. The chat service creates the chat and the user's message in the DB.
-3. It sends the prompt to the inference server and receives the response.
-4. It saves the response in the DB first. Then it sends it back to the user.
+The [API gateway](06-gateway-observability-maintainability.md) checks auth and [rate limits](06-gateway-observability-maintainability.md). The chat backend first stores the chat and the message in the DB. Then it sends the prompt to the inference server, which is the GPU server that runs the LLM. It stores the response and sends it back to the user. Many chat backend servers sit behind the [load balancer](04-performance-throughput-load-balancing.md). With this design, FRs are satisfied.
 
-### FR 2: view past chats and resume
+## Step 7: Problems
 
-- **Sidebar:** `GET /chats` reads the user's chats from the DB, newest first.
-- **Resume:** `GET /chats/{chatId}/messages` loads the messages.
-- **Context:** On a new prompt, the chat service loads the chat's recent messages and sends them to the LLM with the prompt. That is how prior context is carried. Old turns beyond the model's context window are dropped or summarised.
+**1. The user waits for the whole answer.** The LLM takes seconds to write it all. The fix is to stream tokens. The inference server adds each token to a response stream, which is one queue per run ID. The chat backend reads the tokens from that stream. The gateway checks that the user owns the run ID.
 
-With this design, all FRs are satisfied.
+**2. The client keeps asking for new tokens.** Polling every 3 seconds needs about 10 calls for one answer. A [WebSocket](16-interview-framework.md) is two-way but stateful, so the user is tied to one server and scaling is hard. The fix is SSE. The client sends one HTTPS request, and the server keeps writing tokens into the response. At the end it sends an end signal, and the connection closes. Any chat backend can read the run's stream, so the servers stay stateless.
 
-## Step 6: Deep dives
+**3. The GPUs cannot run every prompt at once.** A GPU can work on only a fixed number of prompts, say 20. The fix is a [queue](13-message-queues.md) of prompts, such as RabbitMQ. A pool of workers takes prompts from the queue and calls the inference server. When the queue is too full, the server replies 429 Too Many Requests. This is back pressure, which means refusing new work when the system is full. Workers can also batch small prompts, which means sending them to the GPU together in one pass. Separate queues keep paid users and image jobs apart from free users.
 
-### Deep dive 1: streaming tokens fast and smoothly
-
-Two problems:
-
-- **First token:** How fast the first token reaches the screen. A pure latency problem.
-- **Smooth stream:** The rest must arrive in order, without gaps, even as chat service instances come and go.
-
-**Step 1, make the run first-class.** The inference server writes tokens into a per-run stream (`<tok1><tok2>...`), keyed by `runId`. The user asks for tokens of a particular `runId`. The gateway checks that this user may read this `runId`.
-
-**Step 2, choose how the client receives tokens** (topic 16 compares the options):
-
-| Option | Result here |
-|--------|-------------|
-| Short polling every 3 s | Works, but about 10 API calls for one answer. Tokens arrive in bursts. |
-| WebSocket | Bidirectional, but the client only needs server to client. Stateful: a user connected to one server cannot read from another. Hard to scale. |
-| SSE | One HTTP response stays open. Tokens are pushed as they come. An end marker (`[DONE]`) closes it. Plain HTTP. **Chosen.** |
-
-Cancel and new prompts are plain HTTP calls on the side, so SSE's one direction is enough.
-
-**Step 3, move tokens from the GPU worker to the right chat service instance.** The user's SSE connection is held by one chat service instance. The tokens come from a GPU worker.
-
-| Option | How | Problem |
-|--------|-----|---------|
-| Pin server | The worker sends tokens straight to the instance holding the connection | Stateful. If that instance dies, the stream is lost. |
-| Pub/sub | The worker publishes tokens on channel `runId`. The instance subscribes. | Fire and forget. Tokens sent while no one is subscribed (during a reconnect) are lost. A message queue is overkill. |
-| Event stream | The worker appends tokens to a log for `runId`. Any instance reads from any offset. | None of the above. **Chosen.** |
-
-- **Why an event stream:** The chat service is not tied to one `runId`. If the client reconnects to a different instance, it sends the last token id it saw (`Last-Event-ID` header in SSE). The new instance replays the log from that offset. No gaps.
-- **Redis Streams:** One short-lived stream per run, with a TTL. Good fit for many small streams.
-- **Kafka:** Durable and high throughput. Use a topic partitioned by `runId`, not one topic per run.
-
-```mermaid
-sequenceDiagram
-    participant C as Client
-    participant CS as Chat service
-    participant Q as Prompt queue
-    participant W as GPU worker
-    participant ES as Event stream (runId)
-    C->>CS: POST /chats/{id}/messages
-    CS->>Q: enqueue prompt with runId
-    CS-->>C: 202 { runId }
-    C->>CS: GET .../runs/{runId}/stream (SSE)
-    Q->>W: worker pulls prompt
-    W->>ES: append tok1, tok2, ...
-    CS->>ES: read from offset 0
-    CS-->>C: event tok1, tok2, ...
-    W->>ES: append [DONE]
-    CS-->>C: event [DONE], close
-```
-
-### Deep dive 2: routing and scheduling requests across GPU workers
-
-A GPU can only process a fixed number of requests at once, for example 20. At peak, we cannot run every request in parallel.
-
-- **Queue the prompts:** The chat service no longer calls the LLM. It puts each prompt on a queue (for example RabbitMQ). A pool of worker threads pulls from it. Each worker calls the inference server and streams the result (topic 13).
-- **Backpressure:** If too many prompts are already queued, reject new ones with `429 Too Many Requests` or "server unavailable". Do not let the queue grow forever.
-- **Batching:** Neural networks can process many inputs in one forward pass. Workers group several small requests into one GPU call. This raises GPU throughput a lot.
+**4. The DB gets 500K writes per second.** The fix is to [shard](12-scaling-databases.md) the DB by user, so each user's chats live on one shard. [Consistent hashing](20-partitioning.md) picks the shard. A [cache](04-performance-throughput-load-balancing.md) in front of the DB makes reading old chats faster.
 
 ```mermaid
 flowchart LR
     U["User"] -->|"prompt"| GW["API gateway"]
-    GW -->|"route"| CS["Chat service"]
-    CS -->|"enqueue"| Q["Prompt queue<br/>(RabbitMQ)"]
-    Q -->|"pull"| WP["Worker pool"]
-    WP -->|"batched forward pass"| LLM["Inference server<br/>(GPUs)"]
-    LLM -->|"tokens"| ES["Event stream<br/>(Redis Streams)"]
-    ES -->|"read by runId"| CS
-    CS -->|"SSE tokens"| U
-    CS -->|"save messages"| DB[("Database")]
-    Q -.->|"queue full: 429"| GW
+    GW -->|"1. queue prompt"| Q["Prompt queue"]
+    Q -->|"2. pick up"| W["Worker pool"]
+    W -->|"3. run"| LLM["Inference server (LLM)"]
+    LLM -->|"4. add tokens"| RS["Response stream per run ID"]
+    RS -->|"5. read tokens"| CB["Chat backend"]
+    CB -->|"6. SSE tokens"| U
+    CB -->|"store"| DB[("Sharded DB")]
+    CB -.->|"old chats"| C[("Cache")]
 ```
 
-### Deep dive 3: fairness across tiers
+> **Interview:** Say "SSE streams the tokens from a response stream per run ID". Then say "a queue in front of the GPUs gives back pressure, and the DB is sharded by user".
 
-Heavy users must not take over the GPU pool. Paid tiers must get a better experience.
+## Likely questions
 
-- **Service level (SLA) queues:** Separate queues per class. One for paid users, one for free users, one for image generation.
-- **Weighted pulling:** Workers pull more often from the paid queue, for example 4 paid prompts for every 1 free prompt. Free prompts still progress, so they never starve.
-- **Per-user limits:** At the gateway, cap requests per minute per user. Cap in-flight runs per user, for example 1 for free, 3 for paid (topic 29).
-- **Degrade, do not fail:** Under heavy load, route free users to a smaller, cheaper model.
-
-```mermaid
-flowchart LR
-    CS["Chat service"] -->|"tier = paid"| PQ["Paid queue"]
-    CS -->|"tier = free"| FQ["Free queue"]
-    CS -->|"image prompt"| IQ["Image queue"]
-    PQ -->|"weight 4"| WP["Worker pool"]
-    FQ -->|"weight 1"| WP
-    IQ -->|"own workers"| IW["Image workers"]
-```
-
-### Deep dive 4: cancelling a run and reclaiming the GPU
-
-1. The user hits stop. The client calls `POST /chats/{chatId}/runs/{runId}/cancel`. This is the side channel set aside when SSE was chosen.
-2. The chat service sets the run's status to `cancelled`.
-3. It publishes a cancel signal on a control channel keyed by `runId`.
-4. The worker checks that channel between token batches. When it sees the signal, it drops the sequence and stops generating. The GPU slot is free for the next prompt.
-
-This is the payoff of making the run first-class.
-
-### Deep dive 5: does every part scale?
-
-| Part | How it scales |
-|------|---------------|
-| Chat service | Stateless. Any instance serves any stream because tokens live in the event stream. Add more behind the LB. |
-| Database | Postgres sharded by `user_id` with consistent hashing (topic 12). A user's chats and messages live on one shard. |
-| Chat list reads | Cache the sidebar list and recent messages in Redis to make read calls faster |
-| Message writes | Each message is one row insert. 40K per second spread across shards is fine. |
-| GPU workers | The real limit. Add GPUs, batch more, and use the queues to smooth peaks. |
-
-> **Interview:** The hard parts are streaming and GPU scheduling. Say "SSE for one-way streaming, an event stream keyed by runId so any chat server can resume, a prompt queue with backpressure and batching, and tiered queues for fairness". Show cancellation as a separate POST.
+- **Why SSE, not WebSocket?** Only the server sends the tokens. SSE is a plain HTTP response, so the servers stay stateless and easy to scale.
+- **Why not polling?** Polling needs about 10 calls for one answer, and most of them find nothing new.
+- **What if too many prompts arrive at once?** Prompts wait in a queue for the workers. When the queue is full, the server replies 429.
+- **How do paid users get a better experience?** They get their own queue, so free users cannot slow them down.
