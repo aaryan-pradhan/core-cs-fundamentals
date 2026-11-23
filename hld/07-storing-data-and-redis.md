@@ -18,7 +18,7 @@ Data flow is the core of system design. Data moves from the client, through the 
 ## How it works
 
 1. **Where data lives.** All files live on disk. A file is loaded into RAM when it must run, and the CPU works on it while it runs. A database is a program that keeps data on disk in an organised way and answers queries on it.
-2. **Rows are stored in pages.** Every row has a row id. In MySQL (InnoDB) it is the primary key, which is the column that uniquely names a row. In Postgres it is a separate system column called the tuple id. The DB packs rows into pages of 8 KB in Postgres or 16 KB in MySQL.
+2. **Rows are stored in pages.** Every row has a row id. In MySQL (InnoDB) it is the primary key, which is the column that uniquely names a row ([topic 9](09-data-modelling.md)). In Postgres it is a separate system column called the tuple id. The DB packs rows into pages of 8 KB in Postgres or 16 KB in MySQL.
 3. **The DB reads pages with IOs.** One IO reads a whole page, so the other rows in that page come for free. IOs are expensive, so a good DB design reads as few pages as it can. Some IOs are served from the OS cache instead of the disk. An index ([topic 9](09-data-modelling.md)) exists to cut the pages a query reads.
 4. **Disk is slow.** The fix is Redis, which keeps data in RAM. Each key is a string. The value can be a string, a hash (an object with fields) or a list (a queue). It can also be a set (unique items) or a sorted set (scored items, for leaderboards). A live counter uses `INCR counter`, which is atomic (it runs as one step), so two clients never lose an update.
 5. **RAM is lost on a crash.** The fix is Redis persistence. RDB saves a snapshot of all data to disk every few minutes. AOF (append-only file) logs every write, and Redis replays the log after a restart.
@@ -45,13 +45,7 @@ Every arrow is a [network call](03-one-computer-and-latency.md), so each one add
 | Queries | It runs complex queries, joins and indexes. | It looks up values by key. |
 | Good for | It is the source of truth. | It suits counters, sessions, caches, rate limits and leaderboards. |
 
-| What you need | Store to choose |
-|---------------|-----------------|
-| Transactions, joins, integrity | PostgreSQL (SQL) |
-| Flexible schema, nested documents | MongoDB or Firestore |
-| Key lookups, sessions | Redis or DynamoDB |
-| Huge writes, time series | Cassandra |
-| Heavy relationship traversal | A graph DB |
+[Topic 9](09-data-modelling.md) shows which database to pick for each need.
 
 **Numbers:** One access takes about 5 to 15 ms on an HDD and 50 to 150 µs on a SATA SSD. It takes 10 to 50 µs on an NVMe SSD and 50 to 100 ns in RAM. A Redis read takes about 1 ms, and a DB read about 50 to 100 ms. If a page holds 3 rows, 1001 rows need 334 pages.
 
