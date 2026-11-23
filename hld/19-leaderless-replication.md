@@ -164,6 +164,6 @@ sequenceDiagram
 
 ### Version vectors
 
-With many replicas, one counter is not enough. Each replica keeps its own version number per key. The set of all of them is a **version vector**. It tells which values overwrite others and which are concurrent. Amazon's DynamoDB (from the Dynamo paper) follows this approach.
+With many replicas, one counter is not enough. Each replica keeps its own version number per key. The set of all of them is a **version vector**. It tells which values overwrite others and which are concurrent. Amazon's Dynamo, the design behind DynamoDB, used this approach (vector clocks).
 
 > **Interview:** For an AP system at large scale (carts, chat, sensor data), say "leaderless, like Cassandra, with n = 3 and quorum reads and writes (w = r = 2)". Explain w + r > n. Mention read repair and how concurrent writes are merged.
