@@ -144,7 +144,7 @@ flowchart LR
 - **All or nothing:** A bank transfer moves money from your account (in one DB) to a friend's account (in another DB). Both changes must happen together, or neither. The DBs can never be left inconsistent.
 - **Trade-off:** Some designs reply very fast but risk wrong data. Others make sure the data is correct but reply slower. The goal is a system that is fast and also consistent enough for the product.
 
-Topic 15 (CAP) and topic 18 (Replication) go deeper.
+Topic 14 (CAP) and topic 18 (Replication) go deeper.
 
 ## Durability: the durable queue as commit point
 
@@ -164,4 +164,4 @@ flowchart LR
 - **Commit point:** The write counts as done once the durable queue stores it. The API acks only after that.
 - **Consumer:** It reads the event and writes to the DB. If it crashes, the event is still in the queue.
 
-Topic 7 covers queues (RabbitMQ, Kafka, ActiveMQ) in detail.
+Topic 13 covers queues (RabbitMQ, Kafka, ActiveMQ) in detail.

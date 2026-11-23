@@ -40,7 +40,7 @@ flowchart LR
 2. **On a miss:** Read the persistent database.
 3. **Prime the cache:** Write the value into the cache for the next request.
 
-This pattern is called cache-aside. Topic 12 covers it and the other cache patterns.
+This pattern is called cache-aside. Topic 11 covers it and the other cache patterns.
 
 **Why Redis?**
 
@@ -120,7 +120,7 @@ If each app server keeps state in its own RAM, the copies diverge. App Server 1 
 | What it stores | No client-specific data | Client-specific data |
 | Which server a client uses | Any client can connect to any server | Client 1 must always reach server 1 |
 | Scaling | Easy. Add servers behind the LB. | Hard. You must keep each client's data up to date on its server. |
-| Use | Most web apps | Small websites, or when speed needs in-memory state (see topic 26) |
+| Use | Most web apps | Small websites, or when speed needs in-memory state (see topic 25) |
 
 ```mermaid
 flowchart LR

@@ -68,7 +68,7 @@ Each NFR has a standard fix. Topics 4 to 6 solve all ten on the Live Counter.
 
 Focus on three things. Do this after the FRs.
 
-1. **Start with C vs A (CAP):** Decide if the system prefers consistency or availability. See topic 15.
+1. **Start with C vs A (CAP):** Decide if the system prefers consistency or availability. See topic 14.
 2. **Then estimate DAU:** DAU means daily active users.
 3. **Then estimate throughput:** Discuss the read to write ratio.
 4. **Then estimate latency.**
