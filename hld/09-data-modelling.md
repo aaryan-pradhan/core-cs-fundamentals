@@ -1,163 +1,75 @@
 # 9. Data Modelling and Choosing a Database
 
-How you keep data matters. The data model is the backbone of the system.
+How you keep data matters, because the data model is the backbone of the system. A bad schema gives slow queries, messy scaling and inconsistent data. The type of store and the type of database both matter.
 
-- **Bad schema:** Slow queries, messy scaling and inconsistent data.
-- **Type of data store matters:** Database, cache or blob store.
-- **Type of database matters:** SQL, document, key-value, wide-column or graph.
+## Key terms
 
-## From requirements to schema
+| Term | Meaning |
+|------|---------|
+| Schema | A schema is the plan of the data: the tables, their fields and how they link. |
+| Entity | An entity is a thing the system stores, such as a user or a post. Each entity usually becomes one table. |
+| Relation | A relation is how two entities link. 1:N means one user writes many posts. N:M means many users like many posts, through a middle table such as likes. |
+| Primary key (PK) | A primary key is the field that names exactly one row, such as `id`. |
+| Foreign key (FK) | A foreign key is a field that points to a primary key in another table, such as `posts.user_id`. The database rejects a row that points to nothing. |
+| Index | An index is a separate structure that points to rows, so the database finds a row without reading every [page](07-storing-data-and-redis.md). The index is also stored as pages, so reading it costs [IO](07-storing-data-and-redis.md). |
+| Transaction (ACID) | A transaction is a group of writes that succeed or fail together. ACID means it is all or nothing, it keeps the rules, it hides half-done work, and it survives a crash. |
+| Normalization | Normalization stores each fact once, so there is one source of truth. |
+| Denormalization | Denormalization copies fields into other tables, so reads need fewer joins. A join is a query that combines rows from two tables. |
+| Materialized view | A materialized view is a stored query result that reads can hit directly. |
 
-```mermaid
-flowchart LR
-    R["Requirements"] -->|"find the nouns"| E["Entities"]
-    E -->|"give each a stable id"| K["Keys / IDs"]
-    E -->|"how they connect"| REL["Relationships"]
-    REL -->|"draw tables and fields"| S["Schema Sketch"]
-    S -->|"for the hot queries"| I["Indexes and Scaling Notes"]
-```
+## How it works
 
-## The 3 drivers of schema decisions
+Three questions drive every schema decision. **Volume** asks how big the data is and how fast it grows. **Access patterns** ask which reads, writes and hot queries the system runs. **[Consistency](05-scalability-availability-consistency.md)** asks how strict the data must be, for example whether ACID is needed.
 
-| Driver | Question | What to check |
-|--------|----------|---------------|
-| Volume | How big? | Storage size, growth rate, partitioning |
-| Access patterns | How is it queried? | Read endpoints, hot queries, write endpoints |
-| Consistency | How strict? | Is eventual OK? Is auditability needed? Is ACID needed? |
+1. **Find the entities.** Take the nouns from the requirements. A social media app has users, posts, comments and likes.
+2. **Give each entity a stable id.** Use system-generated IDs, because they never change.
+3. **Find the relations.** One user writes many posts (1:N). One post has many comments (1:N). Users like posts through the likes table (N:M).
+4. **Sketch the schema.** Write each table with its fields and keys. Foreign keys enforce integrity, which means every link points to a real row. They are optional at massive scale. For likes, make `(user_id, post_id)` the primary key, so a user cannot like the same post twice.
+5. **Add indexes and scaling notes.** Add an index for each hot query. SQL then scales with read [replicas](05-scalability-availability-consistency.md), a [cache](04-performance-throughput-load-balancing.md) and [sharding](12-scaling-databases.md), which splits the data across many databases.
 
-- **ACID:** Atomicity (all or nothing), Consistency (rules always hold), Isolation (parallel transactions do not see each other's half work), Durability (a commit survives a crash).
+| Table | Key fields |
+|-------|------------|
+| users | `id` (PK), `username`, `created_at` |
+| posts | `id` (PK), `user_id` (FK), `content` |
+| comments | `id` (PK), `post_id` (FK), `user_id` (FK), `content` |
+| likes | `user_id` and `post_id` together form the PK. Each is also an FK. |
 
-## SQL vs NoSQL
+## Trade-offs
 
-| | SQL (relational) | NoSQL |
-|---|------------------|-------|
-| Structure | Fixed tables, columns and types | No fixed structure needed |
-| Joins | Supported | Mostly not supported |
-| Data integrity | Enforced by the DB with checks and foreign keys | Left to the app code |
-| Horizontal scaling | Harder | Easy |
-| Pick it when | You know the structure of the data | You have no predefined structure in mind yet |
+**Choosing the database:** Start with PostgreSQL. Use another database only if the requirements demand it.
 
-**SQL example (maang.in):**
+| What you need | Data model | Pick |
+|---------------|------------|------|
+| You need transactions, joins and integrity. | Relational | PostgreSQL |
+| You need a flexible schema with nested documents. | Document | MongoDB, Firestore |
+| You need exact key lookups, caching or sessions. | [Key-value](07-storing-data-and-redis.md) | Redis, DynamoDB |
+| You need huge writes or time-series data. | Wide-column | Cassandra |
+| You mostly walk relationships, such as friends of friends. | Graph | Graph DB |
 
-| Table | Columns |
-|-------|---------|
-| users | user_id, first_name, last_name, ... |
-| problems | problem_id, problem_statement, constraints, ... |
-| submissions | submission_id, problem_id, user_id, ... |
+| | [SQL](07-storing-data-and-redis.md) | [NoSQL](07-storing-data-and-redis.md) |
+|---|-----|-------|
+| Structure | Tables have a fixed structure. | No fixed structure is needed. |
+| Joins | Joins are supported. | Joins are mostly not supported. |
+| Integrity | The database checks it, for example that a submission's user exists. | The app code must check it. |
+| Horizontal scaling | It is harder. | It is easy. |
+| Pick it when | You know the structure of the data. | You have no fixed structure in mind yet. |
 
-- **Data integrity:** A submission cannot be made if the user does not exist in the users table. The DB enforces this with a foreign key: `submissions.user_id` must exist in `users`.
-
-**Switching later:**
-
-- **Cost:** Switching is costly in both directions. Every query and every piece of data must move.
-- **NoSQL to SQL:** Easier once the data's structure is clear.
-
-## Data models
-
-| Model | How data is stored | Pros | Cons | Examples |
-|-------|--------------------|------|------|----------|
-| Relational | Tables of rows, linked by keys | Joins, transactions, integrity, mature tools | Fixed schema. Sharding is hard. | PostgreSQL, MySQL |
-| Document | JSON-like documents, nested fields | Flexible schema. One read gets a whole object. | Weak joins. Data is often duplicated. | MongoDB, Firestore |
-| Key-value | A key maps to a value | Fastest exact lookups. Scales easily. | Only lookup by key. No complex queries. | Redis, DynamoDB |
-| Wide-column | Rows with many columns, spread by partition key | Huge write throughput. Good for time-series. | Queries must follow the partition key | Cassandra |
-| Graph | Nodes and edges | Fast relationship traversal (friends of friends) | Hard to scale. Niche. | Neo4j |
-
-## Choosing the DB
-
-Rule of thumb for interviews: start with PostgreSQL. Use another DB only if the requirements demand it.
-
-```mermaid
-flowchart LR
-    Q{"What do we need?"} -->|"transactions, joins, integrity"| PG[("PostgreSQL")]
-    Q -->|"flexible schema, nested docs"| MG[("MongoDB / Firestore")]
-    Q -->|"exact key lookup, caching, sessions"| RD[("Redis / DynamoDB")]
-    Q -->|"huge writes, time-series"| CS[("Cassandra")]
-    Q -->|"relationship traversal heavy"| GR[("Graph DB")]
-```
-
-- **Postgres scales far:** OpenAI scaled PostgreSQL to power 800 million ChatGPT users (openai.com/index/scaling-postgresql).
-
-## Relational example: social media posts
-
-Entities are users, posts, comments and likes.
-
-| Relationship | Type |
-|--------------|------|
-| 1 user writes many posts | 1:N |
-| 1 post has many comments | 1:N |
-| Users like posts, via the likes table | N:M |
-
-```mermaid
-erDiagram
-    USERS ||--o{ POSTS : writes
-    USERS ||--o{ COMMENTS : writes
-    USERS ||--o{ LIKES : gives
-    POSTS ||--o{ COMMENTS : has
-    POSTS ||--o{ LIKES : receives
-    USERS {
-        bigint id PK
-        varchar username UK
-        varchar email UK
-        timestamp created_at
-    }
-    POSTS {
-        bigint id PK
-        bigint user_id FK
-        text content
-        timestamp created_at
-    }
-    COMMENTS {
-        bigint id PK
-        bigint post_id FK
-        bigint user_id FK
-        text content
-        timestamp created_at
-    }
-    LIKES {
-        bigint user_id PK, FK
-        bigint post_id PK, FK
-        timestamp created_at
-    }
-```
-
-## Keys and relationships
-
-- **System-generated IDs:** Use them. They are stable and never change.
-- **Foreign keys:** They enforce integrity. At massive scale they are optional, because they slow writes and do not work across shards.
-- **Composite key for likes:** Use `(user_id, post_id)` as the key. A user cannot like the same post twice.
-
-## Normalization vs denormalization
+Moving from SQL to NoSQL later is very hard. Moving from NoSQL to SQL makes more sense once the structure is clear.
 
 | | Normalized | Denormalized |
 |---|------------|--------------|
-| Meaning | One source of truth. Each fact is stored once. | Fields are duplicated into other tables |
-| Updates | Safe. Consistency is easy. | Hard. Every copy must change. |
-| Reads | Need joins | Faster |
-| Risk | Slow reads at scale | Inconsistency |
+| Updates | Updates are safe, so consistency is easy. | Every copy must change. |
+| Reads | Reads need joins. | Reads are faster. |
+| Risk | Reads get slow at scale. | The copies can disagree. |
 
-**Interview rule:**
+**Numbers:** OpenAI scaled PostgreSQL to power 800 million ChatGPT users.
 
-1. Start normalized.
-2. Denormalize only for a real read bottleneck.
-3. Prefer a cache or a precomputed (materialized) view over duplicating the truth everywhere.
+> **Interview:** Say "I start with PostgreSQL and a normalized schema". Pick another database only when the access pattern demands it. Denormalize only for a real read bottleneck, and prefer a cache or a materialized view first.
 
-- **Materialized view:** A stored query result. It is refreshed on a schedule or on demand. Reads hit it directly.
+## Likely questions
 
-## Scaling notes
-
-SQL scales with read replicas, caching and sharding by access pattern. Topic 12 covers replicas and sharding. Topics 10 and 11 cover caching.
-
-```mermaid
-flowchart LR
-    APP["App"] -->|"writes"| P[("Primary DB")]
-    APP -->|"reads"| RR[("Read Replica")]
-    APP -->|"hot reads"| C[("Cache")]
-    P -->|"copies changes"| RR
-    P -->|"too big?"| SH["Sharding"]
-    SH -->|"user_id % 4 = 0"| S1[("DB 0")]
-    SH -->|"user_id % 4 = 1"| S2[("DB 1")]
-```
-
-- **Sharding example:** With `user_id % 4`, remainder 0 goes to DB 0, remainder 1 to DB 1, and so on up to DB 3. No single server scales forever. Many reasonable DB servers cost less than one huge one.
-
-> **Interview:** Pick the database from the access pattern. Say why (joins and transactions for SQL, scale and flexible schema for NoSQL). Start normalized, then denormalize only for a measured read bottleneck.
+- **SQL or NoSQL?** Start with PostgreSQL for transactions, joins and integrity. Choose NoSQL when the structure is not fixed or the writes are huge.
+- **What drives schema decisions?** Volume, access patterns and consistency drive them.
+- **Why is the likes key `(user_id, post_id)`?** A composite primary key stops a user from liking the same post twice.
+- **When do you denormalize?** Denormalize only for a real read bottleneck. Try a cache or a materialized view first.
+- **Which database takes huge writes?** Cassandra, a wide-column database, is built for huge writes and time-series data.
