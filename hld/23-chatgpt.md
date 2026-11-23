@@ -60,7 +60,7 @@ The [API gateway](06-gateway-observability-maintainability.md) checks auth and [
 
 **2. The client keeps asking for new tokens.** Polling every 3 seconds needs about 10 calls for one answer. A [WebSocket](16-interview-framework.md) is two-way but stateful, so the user is tied to one server and scaling is hard. The fix is SSE. The client sends one HTTPS request, and the server keeps writing tokens into the response. At the end it sends an end signal, and the connection closes. Any chat backend can read the run's stream, so the servers stay stateless.
 
-**3. The GPUs cannot run every prompt at once.** A GPU can work on only a fixed number of prompts, say 20. The fix is a [queue](13-message-queues.md) of prompts, such as RabbitMQ. A pool of workers takes prompts from the queue and calls the inference server. When the queue is too full, the server replies 429 Too Many Requests. This is back pressure, which means refusing new work when the system is full. Workers can also batch small prompts, which means sending them to the GPU together in one pass. Separate queues keep paid users and image jobs apart from free users.
+**3. The GPUs cannot run every prompt at once.** A GPU can work on only a fixed number of prompts, say 20. The fix is a [queue](13-message-queues.md) of prompts, such as RabbitMQ. A pool of workers takes prompts from the queue and calls the inference server. When the queue is too full, the server replies 429 Too Many Requests. This is [backpressure](13-message-queues.md). Workers can also batch small prompts, which means sending them to the GPU together in one pass. Separate queues keep paid users and image jobs apart from free users.
 
 **4. The DB gets 500K writes per second.** The fix is to [shard](12-scaling-databases.md) the DB by user, so each user's chats live on one shard. [Consistent hashing](20-partitioning.md) picks the shard. A [cache](04-performance-throughput-load-balancing.md) in front of the DB makes reading old chats faster.
 
@@ -77,7 +77,7 @@ flowchart LR
     CB -.->|"old chats"| C[("Cache")]
 ```
 
-> **Interview:** Say "SSE streams the tokens from a response stream per run ID". Then say "a queue in front of the GPUs gives back pressure, and the DB is sharded by user".
+> **Interview:** Say "SSE streams the tokens from a response stream per run ID". Then say "a queue in front of the GPUs gives backpressure, and the DB is sharded by user".
 
 ## Likely questions
 
