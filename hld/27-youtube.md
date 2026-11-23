@@ -1,198 +1,90 @@
 # 27. Design YouTube (Video Upload and Streaming)
 
-Creators upload videos. Viewers anywhere watch them with little buffering, on any network.
+Creators upload videos, and viewers watch them on any device and any network. Videos are big and are watched far more often than they are uploaded.
 
-## Step 1: Functional requirements
+## Step 1: FR
 
-| Core | Below the line (out of scope) |
-|------|-------------------------------|
-| Users can upload a video with a title and description | Comments, likes, subscriptions |
-| Users can watch (stream) a video | Recommendations and the home feed |
-| Users can see a video's details (title, uploader, views) | Search |
-| | Live streaming, ads, monetisation |
+- User should be able to upload a video with a title and a description.
+- User should be able to watch a video.
+- User should be able to see a video's details, such as its title, uploader and view count.
 
-## Step 2: Non-functional requirements
+Comments, likes, subscriptions, recommendations, search and live streaming are out of scope.
 
-| NFR | Target |
-|-----|--------|
-| CAP | AP. A new video may appear a few seconds late. View counts may lag. Watching must always work. |
-| Latency | Playback starts in under 2 s. Little or no buffering. |
-| Network | Adapt quality to each viewer's bandwidth, from 2G phones to 4K TVs |
-| Uploads | Support large files (up to 256 GB) and resume after a dropped connection |
-| Scale | 1 billion DAU. 500 hours of video uploaded every minute. |
-| Durability | An uploaded video is never lost |
+## Step 2: NFR
 
-### Estimation
+- **CAP:** We choose AP ([CAP](14-cap-theorem.md)). Watching must always work, and a new video or a view count may show a few seconds late.
+- **Latency:** A video starts playing in under 2 seconds.
+
+## Step 3: Estimates
 
 | Quantity | Calculation | Result |
 |----------|-------------|--------|
-| Views per day | 10^9 DAU × 5 videos | 5 × 10^9 |
-| Views per second (average) | 5 × 10^9 / 10^5 s | 50,000 |
-| Peak views per second | 2× average | 100,000 |
-| Read : write | 5 × 10^9 views vs about 3 × 10^6 uploads per day | Very read-heavy |
-| Video uploaded per day | 500 h × 60 × 24 | 720,000 hours |
-| Storage per day | 720,000 h × about 5 GB per hour (all resolutions) | About 3.6 PB |
-| Concurrent viewers | 5 × 10^9 views × 5 min / 1,440 min | About 17 million |
-| Egress bandwidth | 17 million × 5 Mbps | About 85 Tbps |
+| DAU | | 1 billion (10^9) |
+| Users per second | 10^9 / 10^5 | 10^4 |
+| Write QPS at peak | 10^4 × 0.01 uploads × 5 | 500 per second |
+| Read QPS at peak | 10^4 × 5 videos × 5 | 250K per second |
 
-85 Tbps cannot come from one data center. A CDN is required (topic 10).
+Reads are 500 times the writes, so the system is read heavy. A 1-minute video is about 20 to 50 MB, so a 10-minute video can be 500 MB.
 
-## Step 3: Entities
+## Step 4: Entities
 
 | Entity | Key fields |
 |--------|------------|
 | User | `id`, `name` |
-| Video | `id`, `uploader_id`, `title`, `description`, `status` (uploading, processing, ready, failed), `duration`, `manifest_url`, `created_at` |
-| Upload | `upload_id`, `video_id`, `parts_done` (for resuming) |
-| Rendition | `video_id`, `resolution` (240p to 4K), `codec`, `segment_path` |
+| Video | `id`, `uploader_id`, `title`, `description`, `status`, `views`, `created_at` |
+| Video file | `video_id`, `resolution`, `s3_url` |
 
-## Step 4: APIs
+## Step 5: APIs
 
-**1. Start an upload:**
+- `POST /videos {title, description}` creates a video and returns `{videoId}`.
+- `GET /videos/{videoId}/play` returns the URLs of the video files.
+- `GET /videos/{videoId}` returns the title, the uploader and the view count.
 
-```
-POST /videos
-Body:     { "title", "description", "sizeBytes", "contentType" }
-Response: 201 { "videoId", "uploadId", "partUrls": ["https://blob/...part1?sig=...", ...] }
-```
-
-**2. Upload the parts** straight to blob storage, not through our servers:
-
-```
-PUT https://blob/...partN?sig=...   (body: 100 MB of the file)
-Response: 200 { "etag" }
-```
-
-**3. Finish the upload:**
-
-```
-POST /videos/{videoId}/complete
-Body:     { "uploadId", "parts": [{ "partNumber", "etag" }] }
-Response: 202 { "status": "processing" }
-```
-
-**4. Watch:**
-
-```
-GET /videos/{videoId}
-Response: 200 { "title", "uploader", "views", "manifestUrl": "https://cdn/.../master.m3u8" }
-```
-
-The player then fetches the manifest and the video segments from the CDN.
-
-- **Presigned URLs:** The upload URLs are signed and expire. The client uploads directly to the blob store (topic 8). Our servers never carry the video bytes.
-- **202 Accepted:** Processing takes minutes. The server accepts the job and finishes later.
-
-## Step 5: High-level design
+## Step 6: Basic diagram
 
 ```mermaid
 flowchart LR
-    C["Creator app"] -->|"1. POST /videos"| GW["API gateway"]
+    C["Creator"] -->|"upload video"| GW["API gateway"]
+    V["Viewer"] -->|"watch, details"| GW
+    GW -->|"route"| US["Upload service"]
     GW -->|"route"| VS["Video service"]
-    VS -->|"save metadata"| MDB[("Metadata DB")]
-    VS -->|"presigned part URLs"| C
-    C -->|"2. upload parts"| RAW[("Blob store<br/>raw videos")]
-    RAW -->|"3. upload complete event"| Q["Processing queue"]
-    Q -->|"pull job"| TP["Transcoding pipeline"]
-    TP -->|"segments and manifests"| PROC[("Blob store<br/>processed videos")]
-    TP -->|"status = ready"| MDB
-    V["Viewer app"] -->|"4. GET /videos/id"| GW
-    V -->|"5. manifest and segments"| CDN["CDN edge"]
-    CDN -->|"cache miss"| PROC
+    US -->|"save file"| S3[("S3")]
+    US -->|"save details"| DB[("Video DB")]
+    VS -->|"read details"| DB
+    VS -->|"read file"| S3
 ```
 
-1. **Upload:** The video service stores the metadata with status `uploading`. It returns presigned URLs. The client uploads the parts to the raw blob store.
-2. **Process:** The blob store emits an event. A job goes on the processing queue. The transcoding pipeline makes every resolution and writes them to the processed blob store. It sets the status to `ready`.
-3. **Watch:** The viewer gets the metadata and the manifest URL. The player streams segments from the nearest CDN edge. On a miss, the CDN fetches from the processed blob store.
+The upload service saves the video file in [blob storage](08-rest-and-blob-storage.md) (S3) and its details in the DB. The video service reads the details from the DB and the file from S3. With this design, FRs are satisfied.
 
-With this design, all FRs are satisfied.
+## Step 7: Problems
 
-## Step 6: Deep dives
+**1. Big files pass through the upload service.** A 500 MB file ties up the server for minutes. The fix is a [pre-signed URL](08-rest-and-blob-storage.md), so the client writes the file straight to S3. The upload service only creates the link and saves the details.
 
-### Deep dive 1: large, resumable uploads
+**2. One video file does not play well on every network.** A phone on a slow network cannot play a 1080p file without pauses. The fix is transcoding. Transcoding converts a video into other formats and resolutions, such as 480p, 720p and 1080p. After an upload, a job goes on a [message queue](13-message-queues.md), and workers make each resolution. The player picks the resolution that suits the viewer's network.
 
-A 50 GB upload over one HTTP request fails if the network drops for a second.
+**3. Viewers far from the data center wait too long.** 250K big reads per second from one region is slow and costly. The fix is a [CDN](10-caching-and-cdn.md). It serves the video files from an edge server near the viewer, which takes 25 to 35 ms instead of 250 to 350 ms.
 
-- **Multipart upload:** The client splits the file into parts (for example 100 MB). Each part is uploaded on its own, several in parallel.
-- **Resume:** If a part fails, only that part is retried. The server records which parts are done, so the upload continues after the app restarts.
-- **Complete:** The client sends the list of parts. The blob store joins them into one object.
-- **Checksums:** Each part carries a hash. The blob store rejects a corrupted part.
-
-### Deep dive 2: the transcoding pipeline
-
-A raw upload is one big file in one format. Phones, laptops and TVs need different resolutions and codecs.
-
-- **Transcoding:** Converting a video into another resolution, bitrate or codec (H.264, VP9, AV1).
-- **Segments:** Split the video into short segments of 4 to 10 s. Transcode each segment separately. Then thousands of workers work on one video in parallel.
+**4. Every view writes the view count to the DB.** That is 250K writes per second on the video rows. The fix is to count views in [Redis](07-storing-data-and-redis.md) and copy the totals to the DB every minute. Redis also caches the video details, so most detail reads never reach the DB.
 
 ```mermaid
 flowchart LR
-    RAW[("Raw video")] -->|"split"| SP["Splitter<br/>4 to 10 s segments"]
-    SP -->|"segment jobs"| Q["Task queue"]
-    Q -->|"each segment x resolution"| W["Transcode workers<br/>240p, 480p, 720p,<br/>1080p, 4K"]
-    RAW -->|"extract"| AU["Audio worker"]
-    RAW -->|"pick frames"| TH["Thumbnail worker"]
-    W -->|"encoded segments"| PK["Packager<br/>HLS and DASH manifests"]
-    AU -->|"audio track"| PK
-    PK -->|"write"| OUT[("Processed blob store")]
-    TH -->|"write"| OUT
-    PK -->|"status = ready"| MDB[("Metadata DB")]
+    C["Creator"] -->|"1. get pre-signed URL"| US["Upload service"]
+    C -->|"2. upload file"| S3[("S3")]
+    US -->|"3. transcode job"| Q[["Message queue"]]
+    Q -->|"4. make 480p, 720p, 1080p"| W["Transcode workers"]
+    W -->|"5. save files"| S3
+    S3 -->|"copy to edge"| CDN["CDN"]
+    V["Viewer"] -->|"watch"| CDN
+    V -->|"details, views"| VS["Video service"]
+    VS -->|"cache, counts"| R[("Redis")]
+    VS -->|"read, write"| DB[("Video DB")]
 ```
 
-- **Pipeline as a DAG:** An orchestrator tracks which tasks depend on which. The packager starts only when all segments of all resolutions are done.
-- **Queues between stages:** Each stage reads from a queue (topic 13). A failed task is retried. A task that keeps failing goes to a dead-letter queue.
-- **Fast first:** Produce 480p first and mark the video watchable. Higher resolutions follow.
+> **Interview:** Say "uploads go straight to S3, workers transcode each video, and a CDN serves it near the viewer".
 
-### Deep dive 3: adaptive bitrate streaming
+## Likely questions
 
-The player must change quality as the viewer's network changes.
-
-- **HLS (Apple) and DASH:** Streaming over plain HTTP. The video is a list of small segment files.
-- **Master manifest:** Lists every rendition (240p at 0.4 Mbps, 720p at 3 Mbps, 1080p at 5 Mbps, and so on).
-- **Per-rendition manifest:** Lists that rendition's segment URLs in order.
-- **The player decides:** Before each segment, it measures its bandwidth and buffer. It fetches the next segment from the rendition that fits.
-
-```mermaid
-sequenceDiagram
-    participant P as Player
-    participant CDN as CDN edge
-    P->>CDN: GET master.m3u8
-    CDN-->>P: renditions 240p, 480p, 720p, 1080p
-    P->>CDN: GET 720p segment 1
-    CDN-->>P: segment 1
-    Note over P: bandwidth drops
-    P->>CDN: GET 480p segment 2
-    CDN-->>P: segment 2
-    Note over P: bandwidth recovers
-    P->>CDN: GET 1080p segment 3
-    CDN-->>P: segment 3
-```
-
-- **Fast start:** The first segment is fetched at a low quality, so playback starts in under 2 s.
-- **Seeking:** Jump to minute 10 means fetching segment 10 × 60 / 6 = 100 (6 s segments). No need to download the earlier part.
-
-### Deep dive 4: serving at 85 Tbps with a CDN
-
-- **Popular videos:** A small share of videos gets most of the views. Push them to CDN edges near viewers ahead of time.
-- **Long tail:** Rarely watched videos are served from the origin blob store, or pulled into the CDN on the first request.
-- **Cost:** CDN egress is the biggest bill. Keep only the renditions that are actually watched on the edges.
-- **Edge in ISPs:** Very large platforms put cache servers inside internet providers' networks (YouTube's Google Global Cache, Netflix Open Connect).
-
-### Deep dive 5: metadata and view counts
-
-| Part | Choice |
-|------|--------|
-| Metadata DB | Read-heavy, simple lookups by `video_id`. Shard by `video_id` (topic 12). Add read replicas. |
-| Metadata cache | Redis in front, cache-aside (topic 11). Hot videos are served from cache. |
-| View counts | 100K views per second. Do not update one row per view. Send view events to Kafka. A stream job adds them up and writes the total every few seconds. The count lags a little. That is fine for AP. |
-
-### Does every part scale?
-
-| Part | How it scales |
-|------|---------------|
-| Video service | Stateless. Never touches video bytes. |
-| Blob stores | Object storage (S3) scales to exabytes. 3.6 PB per day is fine. |
-| Transcoding | Add workers. Segments make the work parallel. Use spot machines for cost. |
-| Delivery | CDN. The origin sees only cache misses. |
-
-> **Interview:** The hard parts are processing and delivery. Say "presigned multipart uploads straight to blob storage, a segment-level transcoding DAG fed by queues, HLS or DASH adaptive bitrate, and a CDN for the read path".
+- **Why not upload through the server?** Video files are hundreds of MB. A pre-signed URL lets the client send them straight to S3.
+- **How does a viewer on a slow network watch?** Workers make the video in many resolutions. The player picks a low one on a slow network.
+- **Why a CDN?** There are 250K reads per second of big files. An edge server near the viewer is about 10 times faster and takes the load off the origin.
+- **How do you count 250K views per second?** Count the views in Redis, and copy the totals to the DB every minute.
