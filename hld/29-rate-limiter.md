@@ -1,182 +1,84 @@
 # 29. Design a Rate Limiter
 
-A **rate limiter** caps how many requests a client can make in a time window, for example 100 requests per minute per user. Extra requests get `429 Too Many Requests`. It protects services from abuse, bugs in clients, and traffic spikes. It also enforces paid tiers. Topic 6 places it in the API gateway. This topic designs it.
+A rate limiter caps how many requests a client can make in a time window, such as 100 requests per minute per user. It sits in the [API gateway](06-gateway-observability-maintainability.md) and protects the services from abuse and sudden spikes.
 
-## Step 1: Functional requirements
+## Step 1: FR
 
-| Core | Below the line (out of scope) |
-|------|-------------------------------|
-| Limit requests per client by user id, IP or API key | Network-level DDoS protection (L3 and L4) |
-| Rules per endpoint and per tier (for example `POST /messages`: 20 per minute for free users) | Billing and monthly quotas |
-| Reject over-limit requests with `429` and tell the client when to retry | A UI for editing rules |
+- User (a service owner) should be able to set a limit for an endpoint, such as 100 requests per minute per user.
+- User should be able to send requests that stay under the limit without being slowed down.
+- User should be able to get a `429 Too Many Requests` reply with a retry time once they cross the limit.
 
-## Step 2: Non-functional requirements
+Network-level attack protection, billing quotas and a screen for editing rules are out of scope.
 
-| NFR | Target |
-|-----|--------|
-| Latency | Under 10 ms added to each request (ideally about 1 ms) |
-| Availability | Very high. If the limiter fails, requests must still flow (fail open). |
-| CAP | AP. Letting a few extra requests through during a partition is acceptable. Blocking all traffic is not. |
-| Accuracy | Close to exact across many gateway servers |
-| Scale | 100 million DAU, 1 million requests per second at peak |
+## Step 2: NFR
 
-### Estimation
+- **CAP:** We choose AP ([CAP](14-cap-theorem.md)). If the limiter cannot reach its counters, requests still pass. A few extra requests are better than blocking everyone.
+- **Latency:** The check adds under 10 ms to each request.
+
+## Step 3: Estimates
 
 | Quantity | Calculation | Result |
 |----------|-------------|--------|
-| Checks per second | One per request | 1 million at peak |
-| Memory per client | Key + counter + timestamp | About 100 B |
-| Memory for all clients | 10^8 × 100 B | 10 GB. Fits in a Redis cluster. |
-| Redis nodes | About 100,000 simple operations per second per node | 10+ nodes, sharded by client key |
+| DAU | | 100 million (10^8) |
+| Users per second | 10^8 / 10^5 | 1,000 |
+| Read QPS at peak | 1,000 × 200 requests × 5 | 1M checks per second |
+| Write QPS at peak | Each check also adds one to a counter. | 1M per second |
+| Memory | 10^8 users × 100 B per counter | 10 GB |
 
-## Step 3: Entities
+Reads and writes are equal, and 1M writes per second is far more than Postgres can take. 10 GB fits in memory, so the counters can live in Redis.
+
+## Step 4: Entities
 
 | Entity | Key fields |
 |--------|------------|
-| Rule | `id`, `endpoint`, `key_type` (user, IP, API key), `tier`, `limit`, `window` |
-| Counter (bucket) | `key` (for example `rl:user_42:POST:/messages`), `count` or `tokens`, `last_refill` |
+| Rule | `id`, `endpoint`, `limit`, `window` |
+| Counter | `key` (user id, endpoint and current minute), `count` |
 
-## Step 4: APIs
+## Step 5: APIs
 
-The limiter is internal. The gateway calls it before every request.
+- The admin endpoint `POST /rules {endpoint, limit, window}` creates a rule and returns `{ruleId}`.
+- For every request, the gateway calls `allow(userId, endpoint)`, which returns true while the user is under the limit.
+- When `allow` returns false, the gateway replies `429 Too Many Requests` with a `Retry-After` time and does not call the service.
 
-```
-isAllowed(clientKey, endpoint) -> { allowed, limit, remaining, resetAt }
-```
-
-The client sees standard responses:
-
-```
-HTTP/1.1 429 Too Many Requests
-X-RateLimit-Limit: 100
-X-RateLimit-Remaining: 0
-X-RateLimit-Reset: 1735689660
-Retry-After: 30
-```
-
-- **Headers on every response:** Even allowed responses carry `X-RateLimit-Remaining`. Good clients slow down before they hit the limit.
-- **Rules admin:** `PUT /rules/{ruleId}` with `{ limit, window }`, used by the platform team.
-
-## Step 5: High-level design
+## Step 6: Basic diagram
 
 ```mermaid
 flowchart LR
-    C["Client"] -->|"request"| GW["API gateway<br/>rate limit middleware"]
-    RC[("Rules store")] -->|"rules, cached in memory"| GW
-    GW -->|"check and update counter<br/>(one atomic script)"| R[("Redis cluster<br/>counters by client key")]
-    R -->|"allowed or not"| GW
-    GW -->|"allowed"| S["Backend services"]
-    GW -->|"over limit: 429 + Retry-After"| C
+    C["Client"] -->|"request"| GW["API gateway<br/>rate limiter"]
+    GW -->|"read rules"| DB[("Rules DB")]
+    GW -->|"under limit"| S["Service"]
+    GW -->|"over limit: 429"| C
 ```
 
-1. The gateway finds the rule for this client and endpoint. Rules are loaded from the rules store and cached.
-2. It runs one atomic check-and-update on the client's counter in Redis.
-3. If allowed, the request goes on to the backend. If not, the gateway returns `429`.
+The gateway uses a fixed window. It keeps one counter per user, per endpoint, per minute. Each request adds one to the counter. If the count is above the limit, the gateway replies 429. A new minute starts a new counter at zero. The gateway loads the rules once and keeps them in memory. With this design, FRs are satisfied.
 
-**Why the gateway:** Every request passes through it. Limiting in each service repeats the logic. Limiting in the client cannot be trusted.
+## Step 7: Problems
 
-**Why Redis:** The counters must be shared by all gateway servers. Redis is in memory (sub-ms), has atomic operations and supports TTLs (topic 7).
+**1. Each gateway server has its own counters.** With 10 gateway servers, a user can send 10 times the limit. The fix is to keep the counters in [Redis](07-storing-data-and-redis.md), shared by all gateway servers. Each counter gets a TTL of one minute, so old windows delete themselves.
 
-With this design, all FRs are satisfied.
+**2. Two requests read the same count at once.** Both see 99, both pass, and the user gets 101 requests. The fix is the Redis `INCR` command. It adds one and returns the new count in a single step, so no two requests see the same value.
 
-## Step 6: Deep dives
+**3. One Redis server cannot take 1M operations per second.** The fix is to [shard](12-scaling-databases.md) Redis by user id. All counters of one user sit on one node, so each check touches only one node.
 
-### Deep dive 1: the algorithms
-
-| Algorithm | How | Pros | Cons |
-|-----------|-----|------|------|
-| Fixed window counter | One counter per window (for example per minute). `INCR`, reject above the limit. Reset each new window. | Simplest. One integer per client. | Allows bursts at window edges |
-| Sliding window log | Store the timestamp of every request. Drop the ones older than the window. Count the rest. | Exact | Memory: one entry per request |
-| Sliding window counter | Weighted mix of the current and previous fixed windows | Close to exact, little memory | An approximation |
-| Token bucket | A bucket of tokens refills at a fixed rate. Each request takes one. Empty bucket means reject. | Allows short bursts up to the bucket size. Little memory. | Two settings to tune |
-| Leaky bucket | Requests join a queue that drains at a fixed rate. A full queue means reject. | Perfectly smooth output | Bursts wait in the queue, adding latency |
-
-**Fixed window edge problem:** Limit 100 per minute. A client sends 100 requests at 10:00:59 and 100 more at 10:01:00. Both windows allow them. The backend sees 200 requests in 2 s.
-
-**Sliding window counter formula:**
-
-```
-estimate = current_count + previous_count × (1 - time_into_current_window / window)
-```
-
-Limit 100 per minute. Previous minute had 80. Now it is 15 s into this minute with 30 so far. Estimate = 30 + 80 × (1 - 15/60) = 30 + 60 = 90. Allowed.
-
-**Token bucket example:** Bucket size 10, refill 1 token per second.
-
-| Time | Tokens before | Requests | Result | Tokens after |
-|------|---------------|----------|--------|--------------|
-| 0 s | 10 | 8 | All allowed (burst) | 2 |
-| 1 s | 2 + 1 = 3 | 5 | 3 allowed, 2 rejected | 0 |
-| 5 s | 0 + 4 = 4 | 1 | Allowed | 3 |
+**4. Redis goes down.** Every check would fail. The fix is a [replica](05-scalability-availability-consistency.md) of each Redis node that takes over. Until it does, the gateway fails open, which means it lets requests through.
 
 ```mermaid
 flowchart LR
-    T["Refill: 1 token per second<br/>up to 10"] -->|"add tokens"| B[("Bucket<br/>tokens, last_refill")]
-    RQ["Request"] -->|"take 1 token"| B
-    B -->|"token taken"| OK["Allowed"]
-    B -->|"bucket empty"| NO["429"]
+    C["Client"] -->|"request"| LB["Load balancer"]
+    LB -->|"route"| GW1["Gateway 1"]
+    LB -->|"route"| GW2["Gateway 2"]
+    GW1 -->|"INCR counter"| R[("Redis shards<br/>by user id")]
+    GW2 -->|"INCR counter"| R
+    R -.->|"copy"| RR[("Redis replicas")]
+    GW1 -->|"under limit"| S["Service"]
+    GW2 -->|"under limit"| S
 ```
 
-- **Lazy refill:** No timer runs. On each request, compute `tokens = min(size, tokens + (now - last_refill) × rate)`.
-- **Used by:** Token bucket is the most common choice (Amazon API Gateway, Stripe). It allows a natural burst while keeping the average rate.
+> **Interview:** Say "fixed window counters live in Redis, INCR makes each check one step, and the limiter fails open".
 
-### Deep dive 2: race conditions in a distributed limiter
+## Likely questions
 
-Two gateway servers check the same client at the same time:
-
-```mermaid
-sequenceDiagram
-    participant G1 as Gateway 1
-    participant R as Redis
-    participant G2 as Gateway 2
-    G1->>R: GET counter
-    G2->>R: GET counter
-    R-->>G1: 99
-    R-->>G2: 99
-    G1->>R: SET counter = 100
-    G2->>R: SET counter = 100
-    Note over G1,G2: Both allowed. Limit 100 exceeded: 101 requests.
-```
-
-**Fix:** Make read-check-update one atomic step.
-
-- **Fixed window:** `INCR` is atomic. Use its return value. Set `EXPIRE` when the counter is created.
-- **Token bucket:** Run the whole refill-and-take logic as a Lua script. Redis runs a script as one step, with nothing in between.
-
-```lua
--- KEYS[1] = bucket key, ARGV = size, rate, now
-local b = redis.call('HMGET', KEYS[1], 'tokens', 'ts')
-local tokens = tonumber(b[1]) or tonumber(ARGV[1])
-local ts = tonumber(b[2]) or tonumber(ARGV[3])
-tokens = math.min(tonumber(ARGV[1]), tokens + (tonumber(ARGV[3]) - ts) * tonumber(ARGV[2]))
-local allowed = tokens >= 1
-if allowed then tokens = tokens - 1 end
-redis.call('HSET', KEYS[1], 'tokens', tokens, 'ts', ARGV[3])
-redis.call('EXPIRE', KEYS[1], 3600)
-return allowed and 1 or 0
-```
-
-### Deep dive 3: latency and Redis failure
-
-- **One round trip:** The script does everything in one call. Inside one data center, that is under 1 ms.
-- **Shard by client key:** Use a Redis cluster. One client's counter lives on one node (topic 12).
-- **Local pre-check (optional):** Each gateway keeps a small local counter and syncs with Redis every few hundred ms. Faster, slightly less accurate.
-- **Fail open:** If Redis is down or slow (timeout about 5 ms), allow the request and log it. A short period without limits is better than a full outage.
-- **Fail closed:** For sensitive endpoints, such as login attempts, reject when the limiter is down.
-
-### Deep dive 4: rules and multiple regions
-
-- **Rules:** Stored in a DB or config service. Gateways cache them in memory and refresh every minute. A rule change needs no deploy.
-- **Several limits at once:** A request can face a per-user limit, a per-IP limit and a global limit for the endpoint. It must pass all.
-- **Multiple regions:** Keep counters per region and give each region a share of the limit. Or sync counters between regions asynchronously and accept small overshoot (AP).
-
-### Does every part scale?
-
-| Part | How it scales |
-|------|---------------|
-| Gateways | Stateless. Add more behind the LB. |
-| Counters | Redis cluster sharded by client key. 10 GB of memory. |
-| Rules | Small, cached in every gateway |
-| Hot client | One abusive key hits one Redis node. A local pre-check at the gateway absorbs most of its traffic. |
-
-> **Interview:** State where the limiter runs (the gateway), which algorithm and why (token bucket for bursts, sliding window counter for accuracy), how the counter is shared (Redis with an atomic Lua script), and what happens when Redis is down (fail open).
+- **Why Redis for the counters?** There are 1M checks per second, and each must take under 10 ms. Redis keeps the counters in memory and is shared by all gateways.
+- **What is a weak point of the fixed window?** A user can send the full limit at the end of one minute and again at the start of the next. That is twice the limit in a few seconds.
+- **How do you stop two requests from both passing at 99?** Use `INCR`, which adds one and returns the new count in one step.
+- **What happens if Redis is down?** The limiter fails open and lets requests through, until a replica takes over.
