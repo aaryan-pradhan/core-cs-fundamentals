@@ -1,225 +1,79 @@
 # 13. Message Queues and Async Processing
 
-## Why: the online judge
+Some work takes too long to finish inside one request. A message queue lets the server reply at once and hand the work to background workers. This keeps the server free and lets each part scale on its own.
 
-A user submits code on an online judge (for example maang.in). The request carries the problem id (PID), the code and the language. The server saves the submission, then calls the judger. The judger runs the code against every test case.
+## Key terms
 
-```mermaid
-flowchart LR
-    C["Client"] -->|"PID, code, language"| LB["Load Balancer"]
-    LB -->|"route"| S["Server"]
-    S -->|"save"| D[("Database<br/>Submissions")]
-    S -->|"SID, PID, code,<br/>language, test cases"| J["Judger"]
-    J -->|"verdict (seconds later)"| S
-```
+| Term | Meaning |
+|------|---------|
+| Message queue | A message queue holds tasks between the part that creates work and the part that does it. |
+| Producer | A producer publishes messages to the queue. |
+| Consumer | A consumer, or worker, takes messages from the queue and processes them. |
+| Broker | The broker is the queue server that stores the messages in between. |
+| ACK | An ACK (acknowledgement) is the consumer telling the broker that it finished a message. |
+| At-least-once | At-least-once delivery keeps a message until the consumer sends an ACK. A message is never lost, but it can arrive twice. |
+| Dead letter queue (DLQ) | A DLQ is a separate queue that holds messages that keep failing. |
+| Pub/Sub | In Pub/Sub (publish and subscribe), every subscriber gets its own copy of each event. |
+| Kafka | Kafka is an event stream: a log on disk that keeps messages for a set time, so many consumers can read and replay them. |
 
-### Problems with long synchronous requests
+## How it works
 
-- **Cascading failure and dependency:** The server waits on the judger. If the judger is slow or down, the server's requests pile up and fail too (topic 6).
-- **Limited connections:** Each waiting request holds a connection and a thread. A server can hold only so many. Long requests use them up fast.
-- **The user does not need to wait:** The user only needs confirmation that the solution reached the server. The verdict can come later.
+The example is an online judge. The user sends the problem id (PID), the code and the language. A judger runs the code against every test case.
 
-## What a message queue is
-
-A **message queue** sits between the part that creates work and the part that does it.
-
-- **Producer:** Publishes messages (tasks) to the queue.
-- **Consumer (worker):** Subscribes to the queue, takes messages and processes them.
-- **Broker:** The queue server that stores the messages in between.
-
-```mermaid
-flowchart LR
-    P["Producer"] -->|"publish"| Q[["Message Queue"]]
-    Q -->|"subscribed: deliver"| W["Consumer"]
-```
-
-**Main advantage: producer and consumer are decoupled.** Each one scales, fails and deploys on its own. You can run many consumers on one queue.
-
-### The online judge with a queue
+1. **A long request ties up the server.** The server waits seconds for the judger. If the judger is slow or down, the server's requests pile up and fail too. Each waiting request also holds a connection, and a server has only so many. The user only needs to know that the submission arrived.
+2. **The fix is a queue.** The server saves the submission and puts a message on the queue. It replies "submission queued" at once. A worker takes the message, calls the judger and saves the verdict. The client fetches the verdict later by polling, which means asking again every few seconds ([topic 16](16-interview-framework.md)).
+3. **Contest submissions wait behind practice ones.** The fix is a priority queue, or SLA queues (service level queues). SLA queues give each service level its own queue and its own workers. Paid and free users can get separate queues in the same way.
+4. **Traffic arrives in bursts.** The queue absorbs the burst, and workers drain it at a steady rate. This is called load leveling.
+5. **The queue grows too long.** The server stops taking new work and replies `429 Too Many Requests`. The client retries later. This is called backpressure.
+6. **The broker crashes.** The broker stores every message on disk. On restart, it reloads the messages, so no task is lost.
+7. **A worker crashes mid-task.** With at-least-once delivery, the broker sends the message again. The worker is [idempotent](05-scalability-availability-consistency.md): it checks the submission id (SID) and skips work already saved.
+8. **A message keeps failing.** The worker puts it back on the queue to retry, or moves it to a DLQ.
 
 ```mermaid
 flowchart LR
-    C["Client"] -->|"PID, code, language"| LB["Load Balancer"]
-    LB -->|"route"| S["Server"]
-    S -->|"1. save, status = queued"| D[("Database<br/>Submissions")]
-    S -->|"2. enqueue: SID, PID,<br/>code, language, test cases"| Q[["Queue"]]
-    S -->|"3. reply at once:<br/>submission queued"| LB
+    C["Client"] -->|"PID, code, language"| S["Server"]
+    S -->|"1. save submission"| D[("Database")]
+    S -->|"2. enqueue message"| Q[["Queue"]]
+    S -->|"3. reply: queued"| C
     Q -->|"4. take message"| W["Worker"]
     W -->|"5. run tests"| J["Judger"]
     W -->|"6. save verdict"| D
 ```
 
-1. The server saves the submission and pushes a message to the queue.
-2. It replies "submission queued" at once. The connection is freed.
-3. A worker takes the message, calls the judger and writes the verdict to the DB.
-4. The client fetches the verdict later (polling or a push).
+## Trade-offs
 
-## Queue features
+| Guarantee | If the worker crashes | Trade-off | Example |
+|-----------|-----------------------|-----------|---------|
+| At-most-once | The message is lost forever. | It is fast but unreliable. | IoT sensor data |
+| At-least-once | The message is delivered again. | Nothing is lost, but duplicates arrive. | Most systems |
+| Exactly-once | Nothing is lost or duplicated. | It is very hard and costly, and often needs Kafka and transactions. | Payments |
 
-### Scheduling strategies
+| | Message queue | Event stream |
+|---|---|---|
+| Examples | RabbitMQ, Amazon SQS | Kafka, AWS Kinesis |
+| After a read | The message is deleted once it is ACKed. | The message stays in the log for a set time, such as 7 days. |
+| Consumers | Each message goes to one consumer (1 to 1). | Many consumer groups read the same events (Pub/Sub). |
+| Progress | The broker tracks who read what. | Each consumer tracks its own offset, which is its place in the log. |
+| Replay | Replay is not possible. | A consumer can rewind its offset to replay old events. |
 
-| Strategy | How |
-|----------|-----|
-| FIFO | First in, first out. The oldest message is processed first. |
-| Priority | Higher priority messages go first. Contest submissions beat practice submissions. |
+| Stay synchronous | Use async workers |
+|------------------|-------------------|
+| The design is simpler. | The first response is fast. |
+| There is less to monitor. | A failure stays inside the workers. |
+| Data is consistent at once. | Workers scale on their own. |
+| There are no jobs to track. | Progress can be tracked. |
 
-### SLA queues (service level queues)
+- **When to use workers:** Use workers when a task takes over 5 s or needs heavy CPU or a GPU. Also use them for very high volume, rate-limited external APIs, fan-out to many users, and tasks that need progress updates.
+- **Pub/Sub example:** One "order placed" event goes to three subscribers. They record the payment, send an email and add the order to a batch.
 
-Use separate queues for work with different service levels. Each queue gets its own workers.
+**Numbers:** Move a task to workers if it takes over 5 s. Kafka keeps events for a set time, such as 7 days.
 
-```mermaid
-flowchart LR
-    S["Server"] -->|"contest submission"| Q1[["Contest queue<br/>(prioritized)"]]
-    S -->|"practice submission"| Q2[["Non-contest queue"]]
-    Q1 -->|"many workers"| W1["Workers"]
-    Q2 -->|"fewer workers"| W2["Workers"]
-```
+> **Interview:** When work is slow, heavy or bursty, say "put it on a queue and process it with workers". Then say "at-least-once delivery with idempotent workers, and a DLQ for failed messages".
 
-- **Same idea elsewhere:** Paid users get a separate queue from free users. Image generation gets a separate queue from text chat (topic 23).
-- **Alternative:** Keep one queue, but give contest messages a higher priority.
+## Likely questions
 
-### Load leveling
-
-Traffic arrives in bursts. The queue absorbs the burst. Workers drain it at a steady rate they can handle. The DB and the judger never see the spike.
-
-### Backpressure (429)
-
-If the queue grows too long, the server stops accepting new work. It replies `429 Too Many Requests`. The client retries later. This protects the system instead of letting the queue grow forever.
-
-### Persistence
-
-Messages must be persistent: the broker stores them on disk. If the broker crashes and restarts, it reloads the tasks from disk. Without this, every queued task is lost. Topic 5 shows the durable queue as a commit point.
-
-### Retries and the dead letter queue (DLQ)
-
-A worker may fail to process a message. Two ways to retry:
-
-| Way | How |
-|-----|-----|
-| Re-queue | Put the message back in the same queue. Try again. |
-| Dead letter queue | After N failed tries, move the message to a separate queue, the DLQ |
-
-```mermaid
-flowchart LR
-    Q[["Main queue"]] -->|"deliver"| W["Worker"]
-    W -->|"failed: retry"| Q
-    W -->|"failed N times"| DLQ[["Dead letter queue"]]
-    DLQ -->|"alert, inspect, replay"| E["Engineer"]
-```
-
-- **Why a DLQ:** A "poison" message that always fails would block or loop forever. The DLQ moves it aside. An engineer inspects it and replays it after a fix.
-
-## Delivery guarantees (ACK configs)
-
-An **ACK** (acknowledgement) is the worker telling the broker "I finished this message".
-
-| Guarantee | How | If the worker crashes | Trade-off | Example |
-|-----------|-----|----------------------|-----------|---------|
-| At-most-once | Delivered once. Removed at once. | The message is lost forever | High performance, low reliability | IoT sensor telemetry |
-| At-least-once | Kept until the worker sends an ACK | The message is redelivered | No data loss, but duplicates | Most systems |
-| Exactly-once | No loss, no duplicates | Handled by transactions | Notoriously hard and expensive. Often needs Kafka and transactional logic. | Payments inside Kafka |
-
-```mermaid
-sequenceDiagram
-    participant Q as Queue
-    participant W as Worker
-    participant D as Database
-    Q->>W: deliver message (SID 7)
-    W->>D: save verdict for SID 7
-    W--xQ: crash before ACK
-    Q->>W: redeliver message (SID 7)
-    W->>D: already saved for SID 7? yes, skip
-    W->>Q: ACK
-```
-
-**Rule:** Always design for at-least-once delivery. Make consumers **idempotent** using unique transaction IDs (topic 5). Then a duplicate message does no harm.
-
-## One-to-one vs one-to-many
-
-### Message queue: 1 to 1
-
-Each message is processed by exactly one of the consumers. Many consumers share the work.
-
-```mermaid
-flowchart LR
-    Q[["Queue: M1 M2 M3"]] -->|"M1"| C1["Consumer 1"]
-    Q -->|"M2"| C2["Consumer 2"]
-    Q -->|"M3"| C3["Consumer 3"]
-```
-
-**Chained example (YouTube):** A video is uploaded in 480p. Workers push it through queues to produce 720p, 1080p and other formats (topic 27).
-
-### Pub/Sub: 1 to many
-
-For one event, several different actions must happen. Each action has its own subscriber. Every subscriber gets a copy of every event.
-
-```mermaid
-flowchart LR
-    P["Publisher<br/>(order placed)"] -->|"event"| T[["Topic"]]
-    T -->|"copy"| S1["S1: record the payment"]
-    T -->|"copy"| S2["S2: send email"]
-    T -->|"copy"| S3["S3: add to the batch"]
-```
-
-## Message queues vs event streams
-
-| | Message queue | Event stream (distributed log) |
-|---|---------------|--------------------------------|
-| Examples | RabbitMQ, Amazon SQS | Apache Kafka, AWS Kinesis |
-| After a read | Once consumed and ACKed, the message is deleted forever (transient) | Messages are appended to a log on disk and kept for a retention period, for example 7 days. Reading does not delete. |
-| Consumers | Point-to-point. Usually one consumer group per task. | Pub/Sub. Many consumer groups read the same stream at their own pace. |
-| Replay | Not possible | Rewind a consumer's offset to replay yesterday's events |
-| Who tracks progress | Smart broker, dumb consumer. The broker tracks who consumed what. | Dumb broker, smart consumer. The broker only stores the log. Each consumer tracks its own **offset** (where it left off). |
-| Use | Background jobs, tasks | Event pipelines, analytics, many independent readers |
-
-- **Redis:** Also offers lists, Pub/Sub and Streams for simple queues.
-- **Interview question:** Kafka vs RabbitMQ is commonly asked. Answer with the table above.
-
-```mermaid
-flowchart LR
-    P["Producer"] -->|"append"| L[["Kafka log:<br/>offset 0, 1, 2, 3, 4"]]
-    L -->|"read from offset 4"| G1["Consumer group A<br/>(billing)"]
-    L -->|"read from offset 2"| G2["Consumer group B<br/>(analytics)"]
-    L -->|"rewind to offset 0"| G3["Consumer group C<br/>(replay)"]
-```
-
-## When to use async workers
-
-```mermaid
-flowchart TB
-    R["Operation request"] -->|"check"| T{"How long does it take?"}
-    T -->|"more than 5 s"| A["Async workers"]
-    T -->|"less than 5 s"| CPU{"CPU or GPU intensive?"}
-    CPU -->|"yes"| A
-    CPU -->|"no, just IO"| V{"High request volume?"}
-    V -->|"yes, would need 100s of servers"| A
-    V -->|"no, manageable"| X{"Additional checks"}
-    X -->|"next"| E{"Calls an external API<br/>with rate limits?"}
-    E -->|"yes"| A
-    E -->|"no"| F{"Expensive fan-out<br/>to many users?"}
-    F -->|"yes"| A
-    F -->|"no"| H{"Needs different resources<br/>than the API (GPU)?"}
-    H -->|"yes"| A
-    H -->|"no, same server"| PR{"Needs progress updates?"}
-    PR -->|"yes"| A
-    PR -->|"no"| SY["Synchronous"]
-```
-
-| Consider synchronous | Consider async workers |
-|----------------------|------------------------|
-| Simple architecture | Fast initial response |
-| Less monitoring | Fault isolation |
-| Immediate consistency | Independent scaling |
-| No job tracking | Progress tracking |
-
-## Problems with workers
-
-The queue and workers are new parts that can fail:
-
-- **Worker crash mid-task:** Use at-least-once delivery and idempotent workers.
-- **Poison message:** Use a DLQ.
-- **Queue grows without limit:** Autoscale workers on queue depth. Apply backpressure (429).
-- **Queue is a single point of failure:** Run a broker cluster with replicated, persistent messages.
-- **Monitoring:** Watch queue depth, message age and DLQ size (topic 6).
-
-> **Interview:** When an operation is slow, heavy or bursty, say "put it on a queue and process it with workers". Then state the delivery guarantee (at-least-once), how workers stay idempotent, and what happens to failed messages (DLQ).
+- **Why use a queue?** The server replies at once, and the slow work runs in workers. Producer and consumer scale and fail on their own.
+- **Which delivery guarantee do you choose?** Choose at-least-once, and make consumers idempotent with a unique id, so a duplicate does no harm.
+- **What is a DLQ for?** It holds a message that keeps failing, apart from the main queue.
+- **Kafka or RabbitMQ?** RabbitMQ deletes a message once it is ACKed. Kafka keeps a log, so many consumer groups can read and replay it.
+- **What happens when the queue is full?** The server applies backpressure and replies `429`, and the client retries later.
