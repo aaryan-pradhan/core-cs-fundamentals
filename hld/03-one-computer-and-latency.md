@@ -1,6 +1,6 @@
 # 3. One Computer, Many Computers, and Latency
 
-Many ready-made software and hardware pieces solve these requirements. AWS alone has hundreds of services. You only need to know a few of them to solve about 95% of problems. You must know how to use them.
+Ready-made software and hardware pieces already solve most NFRs (topic 2). AWS alone has hundreds of services. You only need to know a few of them to solve about 95% of problems. You must know how to use them.
 
 ## One computer first
 
@@ -17,7 +17,7 @@ A computer has a motherboard, a CPU (for example Intel Core i7), a hard disk and
 
    `gcc -S -o test.s test.c` gives `test.s`. Part of it:
 
-   ```
+   ```asm
    mov  w8, #5          ; x = 5
    str  w8, [sp, #12]   ; store x
    ldr  w8, [sp, #12]   ; load x
@@ -92,6 +92,8 @@ flowchart LR
 | Same region (client nearby, good network) | 10 to 50 ms |
 | Cross-country, mobile, or bad network | 50 to 200+ ms |
 | TLS handshake (only for a new connection) | adds 20 to 100 ms |
+
+- **TLS:** The encryption layer of HTTPS. A new connection first runs a handshake to agree on keys.
 
 ### 2) Server to DB (network inside the data center or VPC)
 
