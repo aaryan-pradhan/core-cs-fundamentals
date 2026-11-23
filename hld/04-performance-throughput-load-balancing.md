@@ -1,12 +1,11 @@
 # 4. Performance, Throughput and Load Balancing
 
-One server breaks as users grow. A cache makes responses faster. More servers behind a load balancer let the system handle more requests.
+One server breaks as users grow. A cache lowers [latency](03-one-computer-and-latency.md). More servers behind a load balancer let the system handle more requests.
 
 ## Key terms
 
 | Term | Meaning |
 |------|---------|
-| Latency | Latency is the time one request takes to get a response. |
 | Throughput (QPS) | Throughput is the number of requests the system handles per second. QPS means queries per second. |
 | Cache | A cache is a fast store in RAM that keeps copies of often-read data. Redis is the usual cache. |
 | Vertical scaling | Vertical scaling means making one server bigger, with more CPU or RAM. |
