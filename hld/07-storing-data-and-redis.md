@@ -1,133 +1,66 @@
 # 7. Storing Data, Database Pages and Redis
 
-Data flow is the core of system design. Follow the data from the client, through the LB and app server, into Redis and the DB.
+Data flow is the core of system design. Data moves from the client, through the load balancer and the app server, into Redis and the DB. Each store keeps data in a different place, so each has a different speed.
 
-## Where data lives
+## Key terms
 
-| Place | When data is there |
-|-------|--------------------|
-| Disk | All files live on disk by default |
-| RAM | A file is loaded into RAM when it must run or be used |
-| CPU | Data is in the CPU registers while the CPU works on it |
+| Term | Meaning |
+|------|---------|
+| Row id | A row id is a hidden id the DB gives every row. The DB creates and maintains it, not you. |
+| Page | A page is a fixed-size block of rows. The DB stores and reads pages, not single rows. |
+| IO | An IO (input/output) is one read request to the disk. It reads a page or more. |
+| Redis | Redis is an in-memory database. It keeps the active data in RAM, so reads and writes avoid disk IO. |
+| Key-value store | A key-value store saves each value under a key and finds it only by that key. Redis is one. |
+| TTL | TTL (time to live) is the number of seconds a stored entry stays valid. After that, the entry expires. |
+| SQL | A SQL database stores data in tables with a fixed schema (the set of columns every row must have, [topic 9](09-data-modelling.md)) and supports joins and transactions. PostgreSQL and MySQL are examples. |
+| NoSQL | A NoSQL database is any store that is not a SQL table, such as a document, key-value or graph store. |
 
-A database is a program that keeps your data on disk in an organised way. It answers queries on that data.
+## How it works
 
-## Tables and the hidden row_id
-
-A table stores rows and columns.
-
-| emp_id | emp_name | emp_dob | emp_salary |
-|--------|----------|---------|------------|
-| 101 | Vivek | 1/1/1998 | 1,10,100 |
-| 102 | Rohan | 2/2/1998 | 2,20,200 |
-| 107 | Nitish | 3/3/1998 | 3,30,300 |
-
-Internally every row also has a **row_id**. The DB creates and maintains it. You do not.
-
-| row_id | emp_id | emp_name | emp_dob | emp_salary |
-|--------|--------|----------|---------|------------|
-| 1 | 101 | Vivek | 1/1/1998 | 1,10,100 |
-| 2 | 102 | Rohan | 2/2/1998 | 2,20,200 |
-| 3 | 107 | Nitish | 3/3/1998 | 3,30,300 |
-
-| Database | What the row_id is |
-|----------|--------------------|
-| MySQL (InnoDB) | The same as the primary key |
-| Postgres | A separate system column, called the tuple id |
-
-## Pages
-
-The DB does not store or read single rows. It groups rows into fixed-size **pages**.
-
-- **Page size:** 8 KB in Postgres. 16 KB in MySQL.
-- **Storage model:** How rows are packed in a page depends on the storage model (row store or column store).
-- **Example:** If one page holds 3 rows, then 1001 rows need 1001 / 3 = 333.7, rounded up to 334 pages (Page 0 to Page 333).
+1. **Where data lives.** All files live on disk. A file is loaded into RAM when it must run, and the CPU works on it while it runs. A database is a program that keeps data on disk in an organised way and answers queries on it.
+2. **Rows are stored in pages.** Every row has a row id. In MySQL (InnoDB) it is the primary key, which is the column that uniquely names a row. In Postgres it is a separate system column called the tuple id. The DB packs rows into pages of 8 KB in Postgres or 16 KB in MySQL.
+3. **The DB reads pages with IOs.** One IO reads a whole page, so the other rows in that page come for free. IOs are expensive, so a good DB design reads as few pages as it can. Some IOs are served from the OS cache instead of the disk. An index ([topic 9](09-data-modelling.md)) exists to cut the pages a query reads.
+4. **Disk is slow.** The fix is Redis, which keeps data in RAM. Each key is a string. The value can be a string, a hash (an object with fields) or a list (a queue). It can also be a set (unique items) or a sorted set (scored items, for leaderboards). A live counter uses `INCR counter`, which is atomic (it runs as one step), so two clients never lose an update.
+5. **RAM is lost on a crash.** The fix is Redis persistence. RDB saves a snapshot of all data to disk every few minutes. AOF (append-only file) logs every write, and Redis replays the log after a restart.
+6. **Each app server has its own RAM.** With two servers, each keeps its own `counter`, so the values drift apart and die on restart. The fix is to keep app servers [stateless](04-performance-throughput-load-balancing.md). Shared fast state goes in Redis, and durable state goes in the DB.
+7. **A cached entry goes out of date.** A user changes a name from ABC to BCD, but the cache still shows ABC. The fix is a TTL, so the entry expires after a set number of seconds.
 
 ```mermaid
 flowchart LR
-    DB[("Database")] -->|"stores pages on"| HD["Hard disk"]
-    HD -->|"Page 0"| P0["rows 1, 2, 3<br/>Vivek, Rohan, Nitish"]
-    HD -->|"Page 1"| P1["rows 4, 5, 6"]
-    HD -->|"Page 2"| P2["rows 7, 8, 9"]
-    HD -->|"Page 333"| P3["rows 1000, 1001<br/>... Shubham"]
+    C["Client"] -->|"POST /increment"| LB["Load Balancer"]
+    LB -->|"route"| A["App Server<br/>(stateless)"]
+    A -->|"INCR counter"| R[("Redis<br/>(RAM)")]
+    A -->|"SELECT"| D[("Database")]
+    D -->|"reads pages"| H["Disk: Page 0 to Page 333"]
 ```
 
-## IO
+Every arrow is a [network call](03-one-computer-and-latency.md), so each one adds latency and can fail. Draw only the arrows you need. Data can also live in the browser: localStorage survives a restart, sessionStorage lasts for one tab, and IndexedDB holds large data offline.
 
-An **IO** (input/output) is one read request to the disk.
-
-- **Unit:** An IO reads a whole page, or more. It cannot read a single row. You get all the other rows in that page for free.
-- **Cost:** IOs are expensive. Good DB design keeps the number of IOs as small as possible.
-- **Size:** One IO can fetch more than one page. The DB and the OS decide this, for example by reading ahead.
-- **OS cache:** Some IOs are served from the operating system cache, not the disk.
-
-> **Interview:** Indexes (topic 12) exist to cut the number of pages a query must read.
-
-## Storage speeds
-
-| Storage | Latency (access time) | Bandwidth (transfer speed) |
-|---------|-----------------------|----------------------------|
-| HDD | about 5 to 15 ms | 100 to 250 MB/s |
-| SATA SSD | about 50 to 150 µs | 450 to 550 MB/s |
-| NVMe SSD | about 10 to 50 µs | 2 to 7+ GB/s |
-| RAM | about 50 to 100 ns | 30 to 100+ GB/s |
-
-RAM is about 100,000 times faster to access than an HDD. This gap is why caches exist.
-
-## Redis: the in-memory database
-
-Redis keeps the active dataset in RAM. Reads and writes avoid disk IO.
-
-Everything in Redis is stored under a **key**, which is a string. The value can be one of these types:
-
-| Type | Example | Use |
-|------|---------|-----|
-| String | `"counter"` holds `"2"` | Counters, cached values |
-| Hash | `"user:42"` holds `{name: "Umang", role: "admin"}` | Objects with fields |
-| List | push and pop at the ends | Queues |
-| Set | unique items | Tags, "who liked this" |
-| Sorted Set (ZSET) | items with scores | Leaderboards |
-
-- **Live counter in Redis:** `INCR counter`. The increment is atomic, so two clients never lose an update.
-
-### Database vs Redis
+## Trade-offs
 
 | | Database | Redis |
 |---|----------|-------|
-| Storage | Disk | RAM |
-| Durability | Durable | Data can be lost on a crash unless persistence is on |
-| Queries | Complex queries, joins, indexes | Lookups by key |
-| Speed | Slower | Ultra fast, about 1 ms |
-| Good for | The source of truth | Counters, sessions, caches, rate limits, leaderboards |
+| Storage | It stores data on disk. | It stores data in RAM. |
+| Durability | It is durable. | It can lose data on a crash unless persistence is on. |
+| Queries | It runs complex queries, joins and indexes. | It looks up values by key. |
+| Good for | It is the source of truth. | It suits counters, sessions, caches, rate limits and leaderboards. |
 
-### Redis persistence
+| What you need | Store to choose |
+|---------------|-----------------|
+| Transactions, joins, integrity | PostgreSQL (SQL) |
+| Flexible schema, nested documents | MongoDB or Firestore |
+| Key lookups, sessions | Redis or DynamoDB |
+| Huge writes, time series | Cassandra |
+| Heavy relationship traversal | A graph DB |
 
-Redis can also save to disk.
+**Numbers:** One access takes about 5 to 15 ms on an HDD and 50 to 150 µs on a SATA SSD. It takes 10 to 50 µs on an NVMe SSD and 50 to 100 ns in RAM. A Redis read takes about 1 ms, and a DB read about 50 to 100 ms. If a page holds 3 rows, 1001 rows need 334 pages.
 
-| Method | How it works |
-|--------|--------------|
-| RDB snapshots | Saves the whole dataset to disk every few minutes |
-| AOF (append-only file) | Logs every write to a file. Redis replays the file after a restart. |
+> **Interview:** Start with PostgreSQL, and use another store only when a requirement needs it. Say "Redis holds the hot data in RAM, and the DB on disk is the source of truth".
 
-## Why not keep the counter in the app server's RAM?
+## Likely questions
 
-Each app server has its own RAM. With two servers behind an LB, each holds its own `counter`. They drift apart. A request to server 1 sees one value and a request to server 2 sees another. Also, the value dies when the server restarts.
-
-So app servers must stay stateless. Shared fast state goes into Redis, and durable state goes into the DB (see topic 4).
-
-## You can store data anywhere
-
-| Where | Storage | Notes |
-|-------|---------|-------|
-| Browser | Variables in RAM | For example React state from `useState`. Lost on refresh. |
-| Browser | localStorage | Key-value strings. Survives refresh and browser restart. |
-| Browser | sessionStorage | Per tab. Cleared when the tab closes. |
-| Browser | IndexedDB | Large, structured data. Works offline. |
-| Browser | File-based | The user downloads a file |
-| App server | Local files | Save some files locally if needed |
-| Redis | RAM + disk | RDB snapshots + AOF |
-| Database | Disk + RAM cache | The durable store |
-
-## Arrows are not free
-
-Every arrow in a diagram is a network call. Each one adds latency and can fail. Draw as few arrows as you need, and know the cost of each one (topic 3).
+- **Why is Redis fast?** It keeps the data in RAM, and RAM is about 100,000 times faster to access than an HDD.
+- **Why not keep the counter in the app server's RAM?** Each server would hold a different value, and the value dies on restart. Servers must stay stateless.
+- **What happens to Redis data on a crash?** It is lost unless persistence is on. RDB snapshots and the AOF log save it to disk.
+- **Why does a DB read pages and not rows?** One IO always reads a whole page. Reading fewer pages means fewer IOs, which makes queries faster.
+- **SQL or NoSQL?** Start with SQL for transactions and joins. Choose NoSQL when you need a flexible schema, key lookups or huge writes.
