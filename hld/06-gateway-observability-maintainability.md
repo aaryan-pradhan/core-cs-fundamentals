@@ -27,6 +27,9 @@ flowchart LR
 | 6 | Service discovery | Finds where each service runs. Useful with microservices and Kubernetes, where instances move. |
 | 7 | Circuit breaking, timeouts, retries | Fails fast when a service is unhealthy. This avoids cascading failures. |
 
+- **JWT (JSON Web Token):** A signed token that carries the user's id. The gateway checks the signature without a DB call.
+- **API key:** A secret string that identifies a calling app.
+- **OAuth:** A login flow through another provider, such as "Sign in with Google".
 - **Cascading failure:** One slow service makes its callers wait. They run out of threads and fail too. The failure spreads.
 - **Circuit breaker:** After many failures, the gateway stops calling the broken service for a while. It returns an error at once instead of waiting.
 - **TLS termination:** The gateway also handles HTTPS. It decrypts the request so the services behind it do not have to.
@@ -102,6 +105,8 @@ flowchart LR
     S1 -->|"read count"| R[("Redis Cache")]
     S2 -->|"read count"| R
     S3 -->|"read count"| R
+    S1 -->|"check key K"| I[("Idempotency store")]
+    S1 -->|"cache miss: SUM shards"| D
     S1 -->|"publish increment"| Q[["Durable Queue"]]
     S2 -->|"publish increment"| Q
     S3 -->|"publish increment"| Q
