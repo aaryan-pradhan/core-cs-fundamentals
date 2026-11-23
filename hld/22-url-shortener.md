@@ -1,169 +1,88 @@
 # 22. Design a URL Shortener
 
-A URL shortener turns a long URL into a short one. Visiting the short URL redirects to the long one.
+A URL shortener turns a long URL into a short one. Opening the short URL redirects the browser to the long URL.
 
-| Long URL | Short URL |
-|----------|-----------|
-| `https://www.abcdefxyz.com/articles/2024/system-design/part-7?ref=home` | `https://short.ly/aZ3kP9q` |
+## Step 1: FR
 
-## Step 1: Functional requirements
+- User should be able to submit a long URL and get a short URL.
+- User should be able to open a short URL and reach the long URL.
+- User should be able to see how many times a short URL was opened.
 
-| Core | Below the line |
-|------|----------------|
-| Users can submit a long URL and get a short URL | Custom aliases (`short.ly/my-name`) |
-| Users who open a short URL are redirected to the long URL | Expiry dates. User accounts. Analytics dashboards. |
+Custom names, expiry dates and user accounts are out of scope.
 
-## Step 2: Non-functional requirements
+## Step 2: NFR
 
-1. **CAP:** Availability for redirects. A broken short link is worse than a slightly late new one. Creating a short code must still be unique (no two long URLs share one).
-2. **DAU and writes:** 100 million new short URLs per day.
-3. **Throughput:**
-   - Writes: 10^8 / 10^5 s = about 1,000 per second.
-   - Reads: links are opened far more than created. Read : write = 100 : 1. So about 100,000 redirects per second.
-4. **Latency:** A redirect under 100 ms.
-5. **Storage:** About 500 bytes per row (long URL, short code, timestamps). 10^8 × 500 B = 50 GB per day. Over 5 years: 50 GB × 365 × 5 = about 90 TB.
-6. **Bandwidth:** 100,000 reads × 500 B = 50 MB/s.
+- **[CAP](14-cap-theorem.md):** We choose AP. A redirect must always work, and a new short URL that reaches every [replica](05-scalability-availability-consistency.md) a moment late is fine.
+- **Latency:** A redirect takes under 100 ms.
 
-## Step 3: Entities
+## Step 3: Estimates
+
+| Quantity | Calculation | Result |
+|----------|-------------|--------|
+| [DAU](15-estimation.md) | | 100 million (10^8) |
+| Users per second | 10^8 / 10^5 | 10^3 |
+| Write QPS at peak | 10^3 × 0.1 new URLs × 5 | 500 per second |
+| Read QPS at peak | 10^3 × 10 opens × 5 | 50K per second |
+
+Reads are 100 times the writes, so the system is read heavy and needs a [cache](04-performance-throughput-load-balancing.md). In 5 years we create 10^7 × 365 × 5, about 1.8 × 10^10 short URLs.
+
+## Step 4: Entities
 
 | Entity | Key fields |
 |--------|------------|
-| URL mapping | `short_code` (primary key), `long_url`, `created_at` |
+| URL | `short_code` (primary key), `long_url`, `created_at` |
+| Click count | `short_code`, `count` |
 
-## Step 4: APIs
+## Step 5: APIs
 
-**Create a short URL:**
+- `POST /urls {longUrl}` creates a short URL and returns `{shortUrl}`.
+- `GET /{shortCode}` returns [status code](08-rest-and-blob-storage.md) 302 with the long URL, so the browser goes there.
+- `GET /urls/{shortCode}/clicks` returns `{count}`.
 
-```
-POST /urls
-Body:     { "longUrl": "https://www.abcdefxyz.com/..." }
-Response: 201 { "shortUrl": "https://short.ly/aZ3kP9q" }
-```
-
-**Redirect:**
-
-```
-GET /{shortCode}
-Response: 302 Found
-          Location: https://www.abcdefxyz.com/...
-```
-
-### 301 vs 302
-
-| Code | Meaning | Browser caches it? | Server sees every click? |
-|------|---------|--------------------|--------------------------|
-| 301 Moved Permanently | This short URL always goes here | Yes. Later visits skip the server. | No |
-| 302 Found | Redirect for this time only | No. Every visit hits the server. | Yes |
-
-- **301:** Less load on the server.
-- **302:** Use it to count which long URLs are opened most (analytics).
-
-## Step 5: High-level design
+## Step 6: Basic diagram
 
 ```mermaid
 flowchart LR
-    U["User"] -->|"POST /urls or GET /code"| LB["Load balancer"]
-    LB -->|"route"| WS["Web servers<br/>(stateless)"]
-    WS -->|"1. get next ID (create)"| ID["Unique ID generator<br/>(topic 21)"]
-    WS -->|"2. read short code"| C[("Cache<br/>short code: long URL")]
-    C -->|"miss"| DB[("Database<br/>URL mappings")]
-    WS -->|"3. store mapping"| DB
-    WS -->|"302 + Location"| U
+    U["User"] -->|"create or open"| GW["API gateway"]
+    GW -->|"route"| US["URL service"]
+    US -->|"store or read mapping"| DB[("SQL DB")]
 ```
 
-**Create (POST):** The web server makes a short code (step 6). It stores `short_code: long_url` in the DB. It returns the short URL.
+The [API gateway](06-gateway-observability-maintainability.md) routes each request to the URL service. On create, the service hashes the long URL and keeps the first 7 characters in base62. Base62 uses the 62 characters 0 to 9, A to Z and a to z. Seven characters give 62^7, about 3.5 × 10^12 codes, which is far more than we need. The service stores the short code and the long URL in a [SQL](07-storing-data-and-redis.md) DB. On open, it reads the long URL by short code and redirects. With this design, FRs are satisfied.
 
-**Redirect (GET):** The web server checks the cache. On a hit it returns the long URL. On a miss it reads the DB, fills the cache, then returns it (cache-aside, topic 11).
+## Step 7: Problems
+
+**1. Two long URLs can hash to the same short code.** This is a collision, and the mapping must stay one to one. The fix is to check the DB first. If the code is taken, add a fixed string to the long URL and hash again, until the code is free.
+
+**2. Every check is a DB call.** With many collisions, the loop calls the DB again and again. The fix is a Bloom filter. A Bloom filter is an array of bits that tells, using little memory, that a code is surely not in the DB. Each code is hashed to a few bit positions, and those bits are set to 1. If any of a code's bits is 0, the code is surely free, so we skip the DB. If all are 1, the code may exist, so we check the DB.
+
+**3. The DB gets 50K reads per second.** The fix is a cache of short code to long URL in [Redis](07-storing-data-and-redis.md). On a miss, the server reads the DB and fills the cache ([cache-aside](11-cache-patterns-and-problems.md)). [Stateless](04-performance-throughput-load-balancing.md) servers sit behind a [load balancer](04-performance-throughput-load-balancing.md).
+
+**4. With status 301, clicks are missed.** A 301 means "moved for good", so the browser caches it and skips our server next time. A 302 means "this time only", so every click reaches the server. We use 302. Each click adds 1 to the short code's count in Redis, because the SQL DB cannot take 50K count writes per second.
 
 ```mermaid
 flowchart LR
-    G["GET /aZ3kP9q"] -->|"look up"| C{"In cache?"}
-    C -->|"yes"| R["Return 302<br/>with long URL"]
-    C -->|"no"| DB[("DB lookup")]
-    DB -->|"found: fill cache"| R
-    DB -->|"not found"| N["Return 404"]
+    U["User"] -->|"request"| LB["Load balancer"]
+    LB -->|"any request"| US["URL servers<br/>(stateless)"]
+    US -->|"1. is the code free?"| BF["Bloom filter"]
+    US -->|"2. look up code"| C[("Redis cache<br/>and click counts")]
+    C -.->|"miss"| DB[("SQL DB")]
+    US -->|"3. store new mapping"| DB
 ```
 
-With this design, both FRs are satisfied.
+**Hash or unique ID?** A second way to make the code avoids collisions.
 
-## Step 6: Deep dives
+| | Hash | Unique ID |
+|---|----------------------|---------------------|
+| How it works | The service hashes the long URL and keeps 7 characters. | The service gets a [Snowflake ID](21-unique-id-generator.md) and writes it in base62. |
+| Collisions | They happen, and shorter codes collide more often. | They never happen, because every ID is unique. |
+| Extra system | It needs nothing extra. | It needs a separate ID generator. |
 
-### How to make the short code
+> **Interview:** Say "a hash or a unique ID makes the base62 code, and a Bloom filter skips most DB checks". Then add "Redis serves the reads, and 302 lets us count clicks".
 
-The mapping must be **one to one**: one long URL, one short code. Two ways:
+## Likely questions
 
-| | Hash of the long URL | Unique ID + base 62 |
-|---|-----------------------|---------------------|
-| How | `hash(long_url)`, keep the first 8 characters | Get a unique number (topic 21). Write it in base 62. |
-| Collisions | Yes. The shorter the code, the more likely. | None. Every number is unique. |
-| Extra system | None | A unique ID generator |
-| Same long URL twice | Gives the same code | Gives a new code each time |
-
-**Code space:** The characters `[0-9] + [A-Z] + [a-z]` give 62 options.
-
-| Length | Codes |
-|--------|-------|
-| 7 | 62^7 = 3.5 trillion |
-| 8 | 62^8 = 218 trillion |
-
-At 100 million per day for 5 years, we need 1.8 × 10^11 codes. 7 characters are enough.
-
-- **Why base 62, not base 64:** Base 64 adds `+` and `/`. They have special meaning in URLs.
-
-**Base 62 example:** ID 125 = 2 × 62 + 1. Digits 2 and 1 map to `c` and `b` (with `a` = 0). So the code is `cb`.
-
-### Handling hash collisions
-
-```mermaid
-flowchart TB
-    L["Long URL"] -->|"hash"| H["Short code"]
-    H -->|"check"| Q{"Code already<br/>in DB?"}
-    Q -->|"no"| S[("Store in DB")]
-    Q -->|"yes: collision"| P["Long URL + a predefined string"]
-    P -->|"hash again"| H
-```
-
-Each check is a DB call. A Bloom filter avoids most of them.
-
-### Bloom filter
-
-A **Bloom filter** is a memory-efficient structure that says for sure that something is **not** in a set. It is an array of **m bits**, all 0 at the start, with k hash functions. Each hash gives a number from 0 to m - 1.
-
-- **Insert:** Run the k hashes. Set those k bits to 1.
-- **Check:** Run the k hashes. If any of those bits is 0, the item is definitely not in the set. If all are 1, the item may be in the set.
-
-**Example:** m = 12 bits, k = 2 hashes.
-
-| Step | Hashes give | Result |
-|------|-------------|--------|
-| Insert A | 1, 5 | Bits 1 and 5 set to 1 |
-| Insert B | 3, 8 | Bits 3 and 8 set to 1 |
-| Check C | 5, 10 | Bit 10 is 0. C definitely does not exist. No DB call. |
-| Check D | 1, 8 | Both bits are 1 (set by A and B). D may exist. But D is not in the DB. This is a **false positive**. |
-
-```mermaid
-flowchart LR
-    Q["Is short code X taken?"] -->|"k hashes"| BF{"All k bits = 1?"}
-    BF -->|"no"| F["Definitely free.<br/>Use it, skip the DB."]
-    BF -->|"yes"| DB[("Check the DB<br/>(may be a false positive)")]
-```
-
-| Property | Detail |
-|----------|--------|
-| False negatives | Never. An inserted item always has all its bits set. |
-| False positives | Possible. Rate = (1 - e^(-kn/m))^k for n items. |
-| Delete | Not possible. Clearing a bit could remove other items too. |
-| Size | About 10 bits per item gives a 1% false positive rate. 1 billion codes need about 1.2 GB. |
-
-- **Where it is used:** LSM trees skip SSTables with it (topic 17). A cache can use one to skip DB lookups for keys that do not exist.
-
-### Scaling
-
-| Part | How it scales |
-|------|---------------|
-| Web servers | Stateless. Add more behind the LB. |
-| Reads (100K/s) | Cache hot codes in Redis. A small share of links gets most of the clicks. |
-| DB (90 TB) | Key-value lookups only. Shard by `short_code` with consistent hashing (topic 12). Add read replicas. |
-| ID generator | Snowflake on each web server, or a counter service that hands out ranges of 1,000 IDs at a time |
-
-> **Interview:** Discuss both code methods (hash vs unique ID + base 62), how collisions are handled, why 7 characters are enough, 301 vs 302, and the cache in front of the DB. Showing these points proves you know the full setup.
+- **301 or 302?** A 301 is cached by the browser, so it lowers load. A 302 sends every click to the server, so we can count clicks.
+- **How do you handle collisions?** Add a fixed string to the long URL and hash again. A Bloom filter avoids most of the DB checks.
+- **What does a Bloom filter tell you?** If it says no, the code is surely not in the DB. If it says yes, the code may exist, so you check the DB.
+- **Why base62, not base64?** Base64 adds `+` and `/`, which have special meanings in URLs.
