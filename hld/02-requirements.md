@@ -66,7 +66,7 @@ Each NFR has a standard fix. Topics 4 to 6 solve all ten on the Live Counter.
 
 ## Which NFRs to cover in an interview
 
-Focus on three things. Do this after the FRs.
+Cover NFRs in this order, after the FRs.
 
 1. **Start with C vs A (CAP):** Decide if the system prefers consistency or availability. See topic 14.
 2. **Then estimate DAU:** DAU means daily active users.
@@ -84,7 +84,7 @@ Focus on three things. Do this after the FRs.
 |--------------|----------------|
 | Real-time product, such as a live game | 50 to 100 ms. Worst case below 200 ms, or it is no longer real-time. |
 | Social media website | Below 200 ms |
-| Normal API | 5 seconds is the most a user tolerates |
+| Normal API | Well under 1 second. Users give up after about 5 seconds. |
 | Long task, such as finding a ride | 1 to 2 minutes, then cancel |
 
-> **Interview:** Real-time systems care more about consistency. A chat forum like Slack can live with eventual consistency.
+> **Interview:** Some systems need strong consistency, such as the board in a live game. A chat app like Slack can live with eventual consistency.
