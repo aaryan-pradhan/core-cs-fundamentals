@@ -1,157 +1,61 @@
 # 21. Unique ID Generator
 
-Design a service that gives every new record (message, tweet, order) an ID.
+Every new record, such as a message or an order, needs an ID. With many servers and a [sharded](12-scaling-databases.md) DB, making IDs that never repeat is hard. Twitter Snowflake is the usual answer.
 
-## Requirements
+## Key terms
 
-| Requirement | Meaning |
-|-------------|---------|
-| Unique | No two records ever get the same ID |
-| Sorted by time | A record created later gets a bigger ID. X at 7:45 am and Y at 7:46 am means ID(Y) > ID(X). |
-| 64 bits | The ID fits in 64 bits |
-| Numeric | Only digits. Decide this first, because the character set fixes the length. |
+| Term | Meaning |
+|------|---------|
+| Auto-increment | Auto-increment is a DB column that adds 1 to the last ID for each new row. |
+| UUID | A UUID (Universally Unique Identifier) is a random 128-bit ID that any server makes on its own. |
+| Ticket server | A ticket server is one central server whose only job is to hand out the next ID. |
+| Snowflake ID | A Snowflake ID is a 64-bit ID built from a timestamp, a data center ID, a machine ID and a counter. Twitter made it. |
+| Epoch | An epoch is a fixed start time. A timestamp counts the milliseconds since it. |
+| Unix timestamp | A Unix timestamp counts the time since 1 January 1970. |
+| NTP | NTP (Network Time Protocol) keeps the clocks of many servers in sync over the network. |
 
-**Why the character set matters:** With only letters (a to z, A to Z) there are 52 options per character. A fixed length of 10 gives 52^10 IDs. With digits in 64 bits, there are 2^64 IDs.
+## How it works
 
-## Starting point: one server with a counter
+First, agree on four requirements. The ID must be unique. It must be sorted by time, so a record made at 7:46 gets a bigger ID than one made at 7:45. It must fit in 64 bits. It must be numeric, because the character set decides the length.
 
-```
-counter = 0
-while (1) {
-    request = getRequest()
-    counter++
-    return counter
-}
-```
-
-- **Problem:** If the server restarts, the counter starts from 0 again. The IDs issued before are not stored, so old IDs repeat.
-- **Fix:** Store the counter in a DB. On restart, read it back.
-
-```
-counter = getCounterFromDB()
-while (1) {
-    request = getRequest()
-    counter++
-    storeCounterOnDB(counter)
-    return counter
-}
-```
-
-- **New problem:** With several servers, each has its own counter. Keeping them in sync is very hard.
-
-**Auto-increment:** With one DB server, the DB's `AUTO_INCREMENT` column solves this. It only works while one DB can hold all the data. Once data is sharded across DB1 to DB4, each shard's auto-increment starts from 1, and IDs repeat.
-
-## Approach 1: multi-master step counting
-
-Each of the k DBs increments by k, starting from a different offset. With 4 DBs:
-
-| DB | IDs | Rule |
-|----|-----|------|
-| DB1 | 1, 5, 9, 13 | 4n + 1 |
-| DB2 | 2, 6, 10, 14 | 4n + 2 |
-| DB3 | 3, 7, 11, 15 | 4n + 3 |
-| DB4 | 4, 8, 12, 16 | 4n + 4 |
+1. **One server keeps a counter in RAM.** If it restarts, the counter goes back to 0, and old IDs repeat. The fix is to store the counter in the DB and read it back on restart.
+2. **Many servers each keep a counter.** The counters drift apart, and syncing them is very hard. One DB with auto-increment works, but only while one DB holds all the data. Once the data is sharded, each shard starts from 1, and IDs repeat.
+3. **Each of k DBs steps by k.** With 4 DBs, DB1 gives 1, 5, 9 and DB2 gives 2, 6, 10. The IDs are unique, numeric and 64-bit. They are not sorted by time: two requests to DB1 get 1 and 5, then a third request to DB2 gets 2. Adding a fifth DB changes every rule, so it is hard.
+4. **A UUID needs no coordination.** Each server makes its own random ID. A repeat is very unlikely but still possible, so the rare case must be handled. A UUID is 128 bits, not sorted by time and not numeric.
+5. **A ticket server meets all four requirements.** It runs the counter-in-DB loop from step 1, and every web server asks it for IDs. But it is a [single point of failure](05-scalability-availability-consistency.md), and a second ticket server brings back the sync problem.
+6. **Snowflake splits the 64 bits.** Each machine builds IDs on its own, so no sync is needed. The timestamp sits in the highest bits, so a later millisecond gives a bigger ID. The data center ID, machine ID and sequence never repeat within one millisecond, so the ID is unique.
 
 ```mermaid
 flowchart LR
-    DB1[("DB1")] -->|"1, 5, 9 (4n + 1)"| WS["Web server"]
-    DB2[("DB2")] -->|"2, 6, 10 (4n + 2)"| WS
-    DB3[("DB3")] -->|"3, 7, 11 (4n + 3)"| WS
-    DB4[("DB4")] -->|"4, 8, 12 (4n + 4)"| WS
-```
-
-**Not sorted by time:** Requests 1 and 2 go to DB1. They get 1 and 5. Request 3 goes to DB2. It gets 2.
-
-| Time | ID |
-|------|----|
-| t0 | 1 |
-| t1 | 5 |
-| t2 | 2 |
-
-**Scaling problem:** Adding a fifth DB changes the step from 4 to 5. Every server's rule must change. Removing a DB is easy, but about 1/4 of the ID space goes unused.
-
-- **Used by:** Flickr ran two such ticket DBs (odd and even IDs).
-
-## Approach 2: UUID
-
-A **UUID** (Universally Unique Identifier) is a random 128-bit ID, for example `09c93e62-50b4-468d-bf8a-c07e1040bfb2`.
-
-- **Generated locally:** Every server makes its own. No coordination between servers.
-- **Collision chance:** Very low, but not zero. The rare case must still be handled (for example, a unique constraint in the DB that rejects a duplicate and retries).
-- **Version 4:** Fully random. **Version 7** puts a timestamp first, so it sorts by time.
-
-## Approach 3: ticket server
-
-One central server whose only job is to issue IDs. It runs the counter-in-DB code from the starting point.
-
-```mermaid
-flowchart TB
-    W1["Web server 1"] -->|"get ID"| T["Ticket server<br/>counter++, store in DB"]
-    W2["Web server 2"] -->|"get ID"| T
-    W3["Web server 3"] -->|"get ID"| T
-    T -->|"next ID"| W1
-    T -->|"next ID"| W2
-    T -->|"next ID"| W3
-```
-
-- **Simple and numeric:** Meets all four requirements with very little code.
-- **Single point of failure:** If the ticket server goes down, no record anywhere can be created.
-- **Hard to scale:** Adding a second ticket server brings back the sync problem.
-- **Overflow:** After many years, the counter may get close to its limit. Old records that are no longer needed must be cleaned up.
-
-## Approach 4: Twitter Snowflake
-
-Split the 64 bits into parts. Each machine builds IDs alone.
-
-| Bits | Field | Purpose |
-|------|-------|---------|
-| 1 | Sign bit | Always 0. Kept spare for emergencies. |
-| 41 | Timestamp | Milliseconds since a chosen epoch |
-| 5 | Datacenter ID | 2^5 = 32 data centers |
-| 5 | Machine ID | 2^5 = 32 machines per data center |
-| 12 | Sequence number | Counter per machine per ms. Resets to 0 each ms. |
-
-```mermaid
-flowchart LR
-    S["1 bit<br/>sign = 0"] -->|"then"| T["41 bits<br/>timestamp in ms"]
-    T -->|"then"| D["5 bits<br/>datacenter ID"]
+    S["1 bit<br/>sign, always 0"] -->|"then"| T["41 bits<br/>ms since epoch"]
+    T -->|"then"| D["5 bits<br/>data center ID"]
     D -->|"then"| M["5 bits<br/>machine ID"]
-    M -->|"then"| Q["12 bits<br/>sequence"]
+    M -->|"then"| Q["12 bits<br/>sequence per ms"]
 ```
 
-### Why it works
+## Trade-offs
 
-- **Unique:** Datacenter ID + machine ID + sequence never repeat within one millisecond. Two machines never share the first two. One machine never repeats a sequence in the same ms.
-- **Sorted by time:** The timestamp is in the highest bits. A later ms gives a bigger ID.
-- **No sync:** Each machine is independent. No coordination is needed.
-- **Numeric, 64 bits:** Yes.
-
-### Timestamp and epoch
-
-- **Epoch:** A fixed start time. The **Unix timestamp** counts ms since 1 January 1970. Snowflake subtracts a custom epoch (Twitter's is in November 2010) to save bits.
-- **41-bit limit:** 2^41 ms is about 69 years. After that, the timestamp overflows.
-- **When it runs out:** Pick a new epoch and set the timestamp to 0 again, or use the spare sign bit. Either way, the generation technique must change.
-
-### Limits
-
-| Limit | Detail |
-|-------|--------|
-| 4096 IDs per ms per machine | 2^12 = 4096. If a machine needs more in one ms, it waits for the next ms. |
-| Bit split depends on load | Twitter used 12 bits for the sequence. A system with lower QPS can use fewer and give the bits elsewhere. |
-| Clock sync | Order across machines is correct only if their clocks match. Keeping every server on the same time is very hard. |
-| Clock going backwards | If a clock is reset backwards, a machine could repeat IDs. It must refuse to issue IDs until the clock catches up. |
-
-**NTP (Network Time Protocol):** Keeps the clocks of many servers in sync over the network. Servers ask NTP time servers for the correct time and adjust. It gives accuracy of a few ms, not perfect sync.
-
-## Comparison
-
-| | Multi-master | UUID | Ticket server | Snowflake |
-|---|-------------|------|---------------|-----------|
+| | Step by k | UUID | Ticket server | Snowflake |
+|---|-----------|------|---------------|-----------|
 | Unique | Yes | Very likely | Yes | Yes |
-| Sorted by time | No | No (v7: yes) | Yes | Yes (with synced clocks) |
-| 64 bits | Yes | No, 128 | Yes | Yes |
-| Numeric | Yes | No (hex) | Yes | Yes |
-| Coordination | Fixed step setup | None | All calls go to one server | None after machine IDs are set |
-| Weak point | Adding servers | Size, randomness hurts B+ tree inserts | Single point of failure | Clock sync |
+| Sorted by time | No | No | Yes | Yes, if clocks match |
+| 64-bit and numeric | Yes | No, 128-bit | Yes | Yes |
+| Weak point | Adding a DB is hard. | It is long and random. | It is a single point of failure. | It needs synced clocks. |
 
-> **Interview:** Ask the four requirements first. If IDs must be sortable and 64-bit at high scale, use Snowflake. Explain each field and the 4096 per ms limit. Mention NTP and what happens if the clock moves backwards.
+**Snowflake limits:**
+
+- **Sequence:** One machine can make only 2^12 = 4096 IDs in one millisecond. Twitter chose 12 bits, but the split depends on the QPS.
+- **Clocks:** IDs from different machines are sorted only if their clocks match. Servers use NTP to keep their clocks close.
+- **Timestamp runs out:** 41 bits of milliseconds last about 69 years. Then you reset the epoch to 0, or use the spare sign bit.
+
+**Numbers:** A Snowflake ID is 64 bits: 1 + 41 + 5 + 5 + 12. That gives 32 data centers, 32 machines in each, and 4096 IDs per millisecond per machine. A UUID is 128 bits.
+
+> **Interview:** Ask the four requirements first. Then say "Snowflake gives unique, time-sorted 64-bit IDs with no sync between machines", and name each field.
+
+## Likely questions
+
+- **Why not auto-increment?** It works only on one DB. Once the data is sharded, each shard counts from 1, so IDs repeat.
+- **Why not a UUID?** It is 128 bits, it is not numeric, and it is not sorted by time.
+- **What is wrong with a ticket server?** It is a single point of failure, and adding a second one brings back the sync problem.
+- **How is a Snowflake ID unique?** Each machine has its own data center and machine ID, and its 12-bit sequence never repeats within one millisecond.
+- **What is Snowflake's weak point?** Order across machines needs synced clocks, so servers run NTP.
