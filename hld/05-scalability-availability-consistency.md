@@ -4,9 +4,9 @@ This topic fixes NFRs 3, 4, 5, 6 and 7 on the Live Counter.
 
 ## Scalability: the one-row bottleneck
 
-The DB has one row: `counter = 2`. Every `POST /incr` from every server updates that same row. The row becomes a hotspot.
+The DB has one row: `counter = 2`. Every `POST /increment` from every server updates that same row. The row becomes a hotspot.
 
-If you add a second DB to share the load, the copies diverge. Client 1 sends `POST /incr` and one DB now says `counter = 1`. Client 2 reads from the other DB and sees `counter = 2`. Neither value is right.
+Now add a second DB to share the load. Client 1 sends `POST /increment` to DB 1, so DB 1 now says `counter = 3`. Client 2 reads DB 2 and still sees `counter = 2`. The two DBs disagree.
 
 **Fix: sharded counters.** Split the one counter into many rows (shards). Each write updates one shard. A read adds them all.
 
@@ -28,7 +28,7 @@ flowchart LR
 
 ### When a server fails
 
-The LB keeps sending traffic to all servers. If one server dies, the requests sent to it fail.
+Without health checks, the LB keeps sending traffic to every server, even a dead one. The requests sent to the dead server fail.
 
 **Fix: health checks.** The LB keeps checking each instance. It moves traffic away from unhealthy instances.
 
@@ -63,7 +63,7 @@ flowchart LR
 ```
 
 1. Read `counter:global` from Redis. On a hit, return it.
-2. On a miss or a refresh, read the DB, then `SET counter:global` in Redis.
+2. On a miss, or when the cached value is too old, read the DB. Then `SET counter:global` in Redis.
 3. If the DB times out or errors, return the old (stale) value from the cache.
 
 - **Trade-off:** The user sees a slightly old count instead of an error. For a counter this is acceptable.
@@ -89,6 +89,8 @@ flowchart LR
 - **If K was seen:** Skip the increment and return the earlier result.
 
 ## Consistency: strong vs eventual
+
+- **Primary and replicas:** The primary is the main DB copy. It takes every write. Replicas copy from it a little later (topic 18).
 
 Many users look at the counter at the same time.
 
@@ -134,12 +136,12 @@ flowchart LR
 |------|---------|
 | Strong | The update is visible immediately to every reader |
 | Eventual | Every reader definitely gets the data, but it may take some time |
-| Weak | There is a chance the data is lost or never seen |
+| Weak | A reader may never see the update. Example: a dropped frame in a video call. |
 
 ### Why consistency is hard with many DBs
 
 - **Copies must match:** If several DBs hold the same data, a change in one must reach the others.
-- **Failures:** If one DB is down, the three copies cannot stay consistent.
+- **Failures:** If one DB is down, it misses changes. The copies stop matching.
 - **Latency:** Copying data to other DBs (replication) increases the time a request takes.
 - **All or nothing:** A bank transfer moves money from your account (in one DB) to a friend's account (in another DB). Both changes must happen together, or neither. The DBs can never be left inconsistent.
 - **Trade-off:** Some designs reply very fast but risk wrong data. Others make sure the data is correct but reply slower. The goal is a system that is fast and also consistent enough for the product.
@@ -164,4 +166,6 @@ flowchart LR
 - **Commit point:** The write counts as done once the durable queue stores it. The API acks only after that.
 - **Consumer:** It reads the event and writes to the DB. If it crashes, the event is still in the queue.
 
-Topic 13 covers queues (RabbitMQ, Kafka, ActiveMQ) in detail.
+Topic 13 covers queues (RabbitMQ, Kafka, SQS) in detail.
+
+> **Interview:** For each NFR, name the problem and its fix. Scalability: sharded counters. Availability: health checks and a cache fallback. Reliability: idempotency keys. Consistency: read the primary, or accept eventual. Durability: ack only after a durable queue stores the write.
