@@ -1,107 +1,30 @@
 # 1. Why System Design
 
-## The example app: Live Counter
+Any developer can build a small app that runs on one PC. System design asks what happens when many users use that app at once. It builds on development and Core CS, and it separates a senior engineer from a junior one.
 
-The page shows one number and two buttons.
+## Key terms
 
-- **Count card:** It shows the current count, for example `2`.
-- **Increase button:** It adds 1 to the count.
-- **Refresh button:** It reads the latest count again.
+| Term | Meaning |
+|------|---------|
+| System design | System design is planning how the parts of a software system fit together so it works at scale. It has two parts, HLD and LLD. |
+| HLD | HLD (high-level design) picks the big parts, such as servers and databases, and shows how requests flow between them. These notes cover HLD. |
+| LLD | LLD (low-level design) plans the classes and code inside one part. |
+| Client | A client is the user's device or browser. It sends requests and shows the results. |
+| Server | A server is a machine that runs the backend code. It answers client requests. |
+| Database (DB) | A database stores the app's data so it lasts. The server reads and writes it. |
 
-The same problem appears in real products.
+## How it works
 
-| Product | Counter it shows |
-|---------|------------------|
-| Instagram or X post | Likes (36.7K), comments (7.4K) |
-| JioHotstar live stream | Live views (50.3 crore) |
-| YouTube video | Likes (13K) and dislikes (122K) |
+The example app is the Live Counter. Its page shows one number and two buttons. **Increase** adds 1 to the count, and **Refresh** reads the latest count. Real products show the same kind of counter, such as likes on Instagram, live views on JioHotstar and likes on YouTube.
 
-In 2021, YouTube hid the public dislike count. The goal was to reduce "dislike attacks", where many users dislike one video together.
+The app has a React frontend (the client), an Express backend (the server) and a MongoDB database. A junior engineer sees this data flow:
 
-## How the app is built
+1. **API call:** The client sends `GET /counter` to the server.
+2. **Query:** The server asks the DB for the count.
+3. **Result:** The DB returns the count, for example 2.
+4. **Show:** The server sends the count back, and the frontend shows it.
 
-The app has three parts: a React frontend, an Express backend, and a MongoDB database. Docker runs all three.
-
-```mermaid
-flowchart LR
-    FE["Frontend<br/>React, port 80"] -->|"GET /count<br/>(axios.get)"| BE["Backend<br/>Express, port 5001"]
-    FE -->|"PATCH /count<br/>(axios.patch)"| BE
-    BE -->|"Counter.findOne()<br/>counter.save()"| DB[("MongoDB<br/>port 27017")]
-    DB -->|"counter document"| BE
-    BE -->|"200 OK { count }"| FE
-```
-
-1. **Frontend (React):**
-   - **State:** It keeps three values: `count`, `loading` and `error`.
-   - **fetchCount:** It calls `axios.get(API_URL)` and shows `response.data.count`. On failure it shows "Failed to connect to server".
-   - **increaseCount:** It calls `axios.patch(API_URL)` and shows the new count.
-   - **Buttons:** Both buttons stay disabled while a request is loading.
-
-2. **Backend (Express):**
-
-   ```js
-   // GET /count - Get current count
-   app.get('/count', async (req, res) => {
-     let counter = await Counter.findOne();
-     if (!counter) {
-       counter = new Counter({ count: 0 });
-       await counter.save();
-     }
-     res.json({ count: counter.count });
-   });
-
-   // PATCH /count - Increment count
-   app.patch('/count', async (req, res) => {
-     let counter = await Counter.findOne();
-     if (!counter) counter = new Counter({ count: 0 });
-     counter.count += 1;
-     await counter.save();
-     res.json({ count: counter.count });
-   });
-   ```
-
-   - **Errors:** The full code wraps each route in `try/catch`. On an error, it returns `500` with the error message.
-
-3. **Database (MongoDB with Mongoose):**
-   - **Schema:** One field, `count`, of type Number with default 0.
-   - **Model:** `mongoose.model('Counter', counterSchema)`.
-   - **connectWithRetry:** The backend tries to connect to `MONGO_URI`. If it fails, it logs the error and retries every 5 seconds.
-
-4. **Docker Compose:**
-
-   ```yaml
-   services:
-     mongodb:
-       image: mongo:latest
-       ports: ["27017:27017"]
-       volumes: [mongo-data:/data/db]
-     backend:
-       build: ./backend
-       ports: ["5001:5001"]
-       environment:
-         - MONGO_URI=mongodb://mongodb:27017/live-counter
-       depends_on: [mongodb]
-     frontend:
-       build: ./frontend
-       ports: ["80:80"]
-   ```
-
-## Engineer levels
-
-Anyone who learns development can build this app and run it on a PC. The levels differ in what else the engineer knows.
-
-| Level | Skills |
-|-------|--------|
-| Learner (DEV) | HTTP and HTTPS basics, client-server architecture, REST APIs, databases (SQL and NoSQL), authentication and authorization, Git and version control |
-| Junior Engineer (DEV + CLOUD) | Everything above, plus one cloud platform (for example launching an AWS EC2 instance), debugging and logging, deployment and hosting, environment variables and configuration, unit and integration testing |
-| Mid-Level or Senior Engineer (DEV + CLOUD + ?) | Everything above, plus system design |
-
-- **EC2 launch:** You pick a name, an OS image (AMI, for example Amazon Linux 2023), an instance type (for example `t2.micro`), a security group (firewall) and storage (for example 8 GiB).
-- **The edge:** Cloud skills alone do not give you an edge. System design does.
-
-## What a junior engineer sees
-
-A junior engineer sees the data flow. From here on, the endpoints are written as `GET /counter` and `POST /increment`. They do the same job as `GET /count` and `PATCH /count` above.
+A second endpoint, `POST /increment`, adds 1 to the count in the same way.
 
 ```mermaid
 flowchart LR
@@ -111,37 +34,27 @@ flowchart LR
     S -->|"4. sends count to show"| C
 ```
 
-1. The client makes an API call.
-2. The server queries the DB.
-3. The DB returns the count.
-4. The server sends it back to the frontend to show.
+## Trade-offs
 
-## What a senior engineer sees
+| | Junior engineer | Senior engineer |
+|---|-----------------|-----------------|
+| Skills | The engineer knows development and one cloud platform, such as launching an AWS EC2 server. | The engineer also knows system design. |
+| What they see | They see the data flow. | They see the issues in the same flow: too many users at once, a server crash, the limit of the DB and connection problems. |
 
-A senior engineer sees **potential issues** in the same flow.
+A senior engineer also asks the right questions before building anything:
 
-- **Traffic:** What if too many users use it at the same time?
-- **Crash:** What if the server crashes?
-- **Database limit:** What is the limit of the database?
-- **Network:** What about connection issues?
+- **Load:** What happens if 1 million users call `GET /counter`?
+- **Same moment:** What happens if 100 users call it at the exact same time?
+- **DB failure:** What happens if the DB is slow or down?
+- **Correctness:** Is `counter = 2` always correct?
+- **Product:** What does the product need?
 
-A senior engineer also asks the **right questions**.
+> **Interview:** Do not jump to a solution or name every component. First ask what the product needs, then finish a design you can defend.
 
-1. If 1 million users call `GET /counter`, what happens?
-2. If 100 users call it at the exact same time, what happens?
-3. If the DB is slow or down, what happens?
-4. Is `counter = 2` always correct?
-5. What does the product need?
+## Likely questions
 
-> **Interview:** Do not jump to a solution. First ask what the product needs. The answers become the requirements.
-
-## The learning path
-
-| Level | DSA | Development | HLD |
-|-------|-----|-------------|-----|
-| Level 1 | Learn a language | HTML, CSS, JS, Git | Concepts in these notes |
-| Level 2 | Solve 200 to 400 LeetCode problems on different topics | Build one full-stack app end to end | Tactics and concepts used in industry |
-| Level 3 | Learn problem patterns and tactics | Cloud deployment, Docker, performance tuning | Standard books like DDIA (Designing Data-Intensive Applications) |
-| Level 4 | Prepare for ICPC | GSoC, Kubernetes (K8s) | Deep dives into real technologies |
-
-- **Level 3 and 4 topics:** You are not expected to know storage engine internals or deep database tuning before level 3 or 4.
+- **What is system design?** It is planning how the parts of a system fit together so it works at scale. It has two parts, HLD and LLD.
+- **How is HLD different from LLD?** HLD picks the big parts and how they connect. LLD plans the classes and code inside one part.
+- **What does a junior engineer miss?** A junior engineer sees only the data flow. A senior engineer also sees what breaks under load, crashes and slow databases.
+- **What do you do first in a design round?** You ask what the product needs. The answers become the requirements (topic 2).
+- **What does system design build on?** It builds on development and Core CS, which both rest on basic programming and DSA.
