@@ -1,88 +1,84 @@
 # Lecture 12: Transaction
 
-## 1. Transaction
+> **The story:** Bank ABC has two accounts. A has Rs 1000 and B has Rs 2000. You send Rs 50 from A to B. The bank must never lose or create money.
 
-A **transaction** is a unit of work done against the DB in a logical sequence. The sequence is very important.
+## 1. One click, six steps
 
-- **Definition:** It is a logical unit of work with one or more SQL statements.
-- **Outcome:** Either all changes become permanent, or any failure rolls back and every change is undone.
-
-**Example:** Bank ABC has two accounts, A (Rs 1000) and B (Rs 2000). Transfer Rs 50 from A to B. The user sees one operation (debit A, credit B). The DB sees several steps.
-
-Transaction T1 has 6 logical steps, in this sequence:
-
-1. Read(A): read A's balance and check constraints (the balance must not go negative).
-2. A = A - 50: a temporary change, so A becomes 950.
-3. Write(A).
-4. Read(B).
-5. B = B + 50: B becomes 2050.
-6. Write(B).
+You press "Send Rs 50" once. The DB runs it as six steps in a fixed order. Together they form one transaction.
 
 ```mermaid
 flowchart LR
   S1["1. Read(A)<br/>A = 1000"] --> S2["2. A = A - 50<br/>A = 950"] --> S3["3. Write(A)"] --> S4["4. Read(B)<br/>B = 2000"] --> S5["5. B = B + 50<br/>B = 2050"] --> S6["6. Write(B)"]
 ```
 
-- **Atomic:** The 6 steps are treated as a single task. Either the whole transaction completes, or none of it happens.
-- **Failure causes:** An unreadable B, a server error, a hardware failure or a logical error.
-- **Rollback:** If failure comes after A was debited, the debited money is credited back. Real banks sometimes take hours or days, but the money still returns.
-- **Consistency:** Money can neither be created nor destroyed. The total is Rs 3000. If Rs 50 is deducted from A and the transaction neither completes nor rolls back, the system has Rs 2950.
+| Term | Meaning |
+|---|---|
+| Transaction | It is one logical unit of work made of one or more SQL statements. |
+| Commit | All changes become permanent together. |
+| Rollback | A failure undoes every change of the transaction. |
+| SQL | The commands are `BEGIN TRANSACTION`, `COMMIT` and `END TRANSACTION`. |
 
-> **Interview:** A transaction is a unit of work made of many steps. It is complete only when all steps complete.
+> **Interview:** A transaction is complete only when all of its steps complete.
 
-**Read and Write inside a transaction:**
+## 2. Where the work happens
 
-1. **Read(A):** The DB is on disk and still has 1000. Read brings the value into a local buffer in main memory (RAM).
-2. **Write(A):** Conceptually, it writes the buffer value (950) into the DB on disk. This is a simplification.
-3. **In real DB systems:** Write also goes only to a buffer in RAM. The change reaches the physical DB only when COMMIT is called at the end.
-4. **SQL commands:** `BEGIN TRANSACTION`, `COMMIT`, `END TRANSACTION`.
-
-```mermaid
-flowchart LR
-  D[("DB on disk<br/>A = 1000")] -- "Read(A)" --> B["Buffer in RAM<br/>A = 950 after A - 50"]
-  B -- "Write(A): stays in buffer" --> B
-  B -- "COMMIT" --> D2[("DB on disk<br/>A = 950")]
-```
-
-## 2. ACID Properties
-
-The DB system must maintain these properties of a transaction to keep the data's integrity. A transaction that does not follow these 4 properties brings inconsistency into the DB. Integrity constraints (domain constraints, consistency constraints) were covered earlier.
-
-> **Interview:** "What are the ACID properties?" is a very famous interview question.
-
-### a. Atomicity
-
-Either all operations of the transaction are reflected properly in the DB, or none are.
-
-- **Binary:** All 6 steps reflect in the DB, or none do. It is 0 or 1, never fuzzy.
-- **Example:** A = 1000, B = 2000. Read(A), A - 50 = 950, Write(A) are done. Before B is updated, the system crashes. Now A = 950 and B = 2000, so the total is 2950. Rs 50 is lost. This is an inconsistent state.
-- **Recovery:** On failure, the transaction recovers to the old state (A = 1000, B = 2000), because it never reached the committed state.
-- **Old state kept:** The DB maintains the old state separately from the intermediate state.
+The DB lives on disk. Read copies A into a RAM buffer. Write also changes only the buffer. Only COMMIT puts the change on disk.
 
 ```mermaid
 flowchart LR
-  O["Old state<br/>A = 1000, B = 2000<br/>total 3000"] --> M["Read(A), A - 50, Write(A)<br/>A = 950, B = 2000"]
-  M -- "crash before B is updated" --> X["A = 950, B = 2000<br/>total 2950: Rs 50 lost"]
-  X -- "recover: never committed" --> O
+  D[("Disk<br/>A = 1000")] -->|"Read(A)"| B["RAM buffer<br/>A = 950 after A - 50"]
+  B -->|"Write(A): still in buffer"| B
+  B -->|"COMMIT"| D2[("Disk<br/>A = 950")]
 ```
 
-### b. Consistency
+## 3. ACID: four things that can go wrong
 
-Integrity constraints must be maintained before and after the transaction. The DB must be consistent after the transaction.
+Each ACID property stops one disaster in the transfer.
 
-- **Example:** Total money in the banking system is 3000 before and after. One account is debited and another is credited, so nothing is lost.
-- **Link to atomicity:** If atomicity is implemented properly, consistency is maintained.
+```mermaid
+flowchart TB
+  ACID["ACID keeps the transfer safe"]
+  ACID --> A["Atomicity<br/>all 6 steps or none"]
+  ACID --> C["Consistency<br/>total stays Rs 3000"]
+  ACID --> I["Isolation<br/>parallel transfers look sequential"]
+  ACID --> D["Durability<br/>a committed transfer survives a crash"]
+```
 
-### c. Isolation
+| Property | Rule | Who ensures it |
+|---|---|---|
+| Atomicity | All steps happen, or none happen. | The recovery system rolls back. |
+| Consistency | Integrity constraints hold before and after. | Correct atomicity gives consistency. |
+| Isolation | Concurrent transactions behave as if run one by one. | The DB uses locks. |
+| Durability | Committed changes survive any failure. | The recovery manager uses logs. |
 
-Even when transactions run concurrently, for every pair Ti and Tj it appears to Ti that either Tj finished before Ti started, or Tj started after Ti finished. Each transaction is unaware of the others.
+> **Interview:** "What are the ACID properties?" is a very famous question. Explain each one with the A to B transfer.
 
-- **Example problem:** T1 (you, from your phone) and T2 (net banking) both transfer Rs 50 from A to B at the same time.
-  - Both read A = 1000.
-  - T1 writes A = 950. T2 also computes 1000 - 50 = 950 and writes A = 950.
-  - Both credit B, so B = 2000 + 50 + 50 = 2100.
-  - **Result:** A = 950, B = 2100, total 3050. Rs 50 was created, which is impossible.
-- **Solution:** Make transactions look sequential. T2 does not start until T1 terminates (succeeds or fails).
+## 4. Atomicity: the crash in the middle
+
+A is debited. Then the server crashes before B is credited. Rs 50 vanishes, so the DB rolls back to the old state.
+
+```mermaid
+flowchart LR
+  O["Old state<br/>A = 1000, B = 2000<br/>total 3000"] --> M["Steps 1 to 3 done<br/>A = 950, B = 2000"]
+  M -->|"crash before B"| X["Total 2950<br/>Rs 50 lost"]
+  X -->|"never committed, so roll back"| O
+```
+
+The DB keeps the old state apart from the half-done state. That is how it can roll back.
+
+## 5. Consistency: count the money
+
+The total money in the bank must be the same before and after.
+
+| Moment | A | B | Total | Consistent? |
+|---|---|---|---|---|
+| Before | 1000 | 2000 | 3000 | Yes. |
+| After success | 950 | 2050 | 3000 | Yes. |
+| After crash, no rollback | 950 | 2000 | 2950 | No. |
+
+## 6. Isolation: two phones, one account
+
+You send Rs 50 from your phone (T1). At the same moment, net banking (T2) also sends Rs 50. Both read the old value of A.
 
 ```mermaid
 sequenceDiagram
@@ -95,91 +91,50 @@ sequenceDiagram
   T2->>DB: Write(A) = 950
   T1->>DB: B = 2000 + 50
   T2->>DB: B = 2050 + 50
-  Note over DB: A = 950, B = 2100, total 3050: Rs 50 created
+  Note over DB: A = 950, B = 2100, total 3050. Rs 50 was created.
 ```
-- **In reality:** Both execute concurrently. The DB uses locks so the result is logically sequential.
-- **Importance:** Without isolation, consistency breaks for the whole DB.
-- **Link to OS:** A decrement must be an atomic operation, so that another thread or transaction does not read the old value.
 
-### d. Durability
+The fix is to make T2 wait until T1 ends. In reality both run together, but locks make the result look sequential.
 
-After a transaction completes successfully, its changes persist, even through system failures.
+## 7. Durability: the crash after "Success"
 
-- **Problem case:** The user is told the transaction completed, but a system failure at the end means the change never reached the DB. The user's Rs 50 never arrived. This must never happen.
-- **Real DBs:** The work happens on a copy in main memory (A = 950, B = 2050). Writing it to the DB file on disk must succeed. If the system crashes during that write, the DB must recover and re-execute it.
-- **Mechanism:** A crash wipes main memory. So the DB either generates logs of every operation (such as 50 subtracted, write to A, read B) and keeps them on disk, or writes to disk at intermediate points.
-- **Restart:** The system reads the logs, finds what happened and redoes the changes in the actual DB. Checkpoints can also be used (covered later).
+The app shows "Success". Then the server crashes before RAM reaches disk. The log on disk lets the DB redo the transfer.
 
 ```mermaid
 flowchart LR
-  T["Transaction works in RAM<br/>A = 950, B = 2050"] -- "every operation" --> L[("Log on disk")]
-  T -- "write to DB file" --> X["Crash: RAM wiped"]
-  X -- "restart" --> R["Recovery manager reads log"] -- "redo changes" --> D[("DB on disk<br/>A = 950, B = 2050")]
+  T["Transfer done in RAM<br/>A = 950, B = 2050"] -->|"every operation"| L[("Log on disk")]
+  T -->|"writing to DB file"| X["Crash<br/>RAM wiped"]
+  X -->|"restart"| R["Recovery manager<br/>reads the log"]
+  L --> R
+  R -->|"redo changes"| D[("Disk<br/>A = 950, B = 2050")]
 ```
-- **Owner:** The recovery management component of the DB ensures durability.
 
-## 3. Transaction states
+Checkpoints also help recovery. They are covered in the next lecture.
 
-This is the life cycle of a transaction.
+## 8. The life of a transaction
+
+Every transfer moves through these states. It ends either committed or aborted.
 
 ```mermaid
-flowchart LR
-    A[Active state] -- R/W operations --> P[Partially committed state]
-    P -- Permanent store --> C[Committed state]
-    A -- Failure --> F[Failed state]
-    P -- Failure --> F
-    F -- Roll back --> AB[Aborted state]
-    C --> T[Terminated state]
-    AB --> T
+stateDiagram-v2
+  [*] --> Active
+  Active --> PartiallyCommitted: all reads and writes done
+  Active --> Failed: error
+  PartiallyCommitted --> Committed: COMMIT saved to disk
+  PartiallyCommitted --> Failed: error
+  Failed --> Aborted: roll back
+  Committed --> Terminated
+  Aborted --> Terminated
+  Terminated --> [*]
 ```
 
-### a. Active state
+| State | What happens | Transfer example |
+|---|---|---|
+| Active | All reads and writes run here. | Steps 1 to 6 run. |
+| Partially committed | The last step is done, but changes sit in the RAM buffer. | A = 950 and B = 2050 exist only in RAM. |
+| Committed | Changes are permanent. Rollback is no longer possible. | The disk shows A = 950 and B = 2050. |
+| Failed | A hardware, software, network or user error stops the transaction. | The server crashes at Write(A). |
+| Aborted | Every buffered change is undone. The old state returns. | The disk still shows A = 1000 and B = 2000. |
+| Terminated | The transaction has either committed or aborted. | The transfer is over. |
 
-This is the very first state. All read and write operations happen here.
-
-- **No error:** T moves to partially committed.
-- **Any error:** T moves to failed.
-- **Example:** Read(A) and Read(B) succeed, so T goes to partially committed. A problem even while reading from the DB sends T straight to failed.
-
-### b. Partially committed state
-
-After the transaction executes, the changes are saved in a buffer in main memory.
-
-- **Next state:** If the changes become permanent on the DB, T moves to committed. On any failure, T goes to failed.
-- **Main memory:** All the work happens there, because the CPU does the plus and minus work there. Data is brought from the storage device (hard disk, SSD, a server or S3).
-- **Commit:** When all 6 steps are done, COMMIT makes the changes permanent in the DB, and T moves to committed.
-- **Error:** An error at any step (for example during Write(A)) sends T straight to failed.
-- **Every state checks completion:** This keeps atomicity and avoids inconsistency.
-
-### c. Committed state
-
-The updates are permanent on the DB.
-
-- **No rollback:** Rollback cannot be done from the committed state.
-- **New state:** A new consistent state is achieved.
-- **Example:** The DB before Active is State 1 (A = 1000, B = 2000). After commit, it is State 2 (A = 950, B = 2050). The changes are permanent. The transaction was successful.
-
-### d. Failed state
-
-A failure happens while T executes, so it cannot continue.
-
-- **Failure types:** Hardware, software, a communication issue, or an interrupt by the user. Any kind counts.
-
-### e. Aborted state
-
-When T reaches the failed state, all changes made in the buffer are reversed. T rolls back completely and reaches the aborted state.
-
-- **Result:** The DB's state before T is restored.
-- **Example:** After rollback, the DB returns to State 1. It never reached State 2.
-
-### f. Terminated state
-
-A transaction has terminated if it has either committed or aborted.
-
-- **In SQL:** `BEGIN TRANSACTION` and `END TRANSACTION` are the two operators. The work in between is the partially committed work.
-- **On a problem:** T goes to failed and rolls back to a checkpoint or an earlier state.
-- **On leaving the block:** T is terminated, through either abort or commit.
-
-## 4. Implementing atomicity
-
-How to implement atomicity is covered in the next lecture (Lecture 13).
+> **Interview:** A committed transaction can never be rolled back. A failed one always ends as aborted.
