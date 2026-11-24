@@ -1,76 +1,97 @@
 # Lecture 17: Clustering in DBMS
 
-1. **Database clustering** means making **replica sets**. It combines more than one server or instance that connect to a single database.
-   - **Why:** Sometimes one server cannot handle the amount of data or the number of requests. Then a data cluster is needed.
-   - **Related terms:** Database clustering, SQL server clustering and SQL clustering are closely associated. SQL is the language used to manage the database information.
-   - **Cluster:** A bundle, collection or group of servers (nodes) holding the same database.
-   - **Example problem:** One database holds all the info. Millions of customers send millions of requests daily from all over the world. One DB on one computer cannot serve worldwide requests easily, however much it is scaled vertically (super computer).
-   - **Availability risk:** If that one database or computer goes down, availability is gone. The website is down and users shout.
-   - **Popularity:** Clustering became popular with the internet. It is mostly used with NoSQL, where multiple servers and horizontal scaling are needed. It works with SQL too.
-   - **Example:** MongoDB provides replica sets (replication), so you can make replicas of the database.
+> **The story:** Your shop goes global. Millions of users hit one DB server every day. The server cannot keep up, so you copy it.
 
-2. **Replicate the same dataset on different servers.**
-   - Make servers S1, S2 and S3 holding databases D1, D2 and D3. D1 = D2 = D3, so the same data is stored on all three servers.
-   - It is not the case that S1 holds more users and S2 fewer. Every server holds the same users' data (for example 1000 users on each).
-   - This set of servers (replicas) is one cluster.
+## 1. One server is not enough
 
-   ```mermaid
-   flowchart LR
-     subgraph Cluster["One cluster (replica set)"]
-       direction TB
-       S1["S1: D1"]
-       S2["S2: D2"]
-       S3["S3: D3"]
-     end
-     S1 <-. "sync: D1 = D2 = D3" .-> S2
-     S2 <-. "sync" .-> S3
-   ```
-   - **Architecture:** Create the same instances, make replicas, and store them as a cluster.
-   - **Server / node / host:** A capable computer connected to the internet. Its main job is to store data, take requests, process the data and send it back.
+One DB on one machine serves the whole world. A bigger machine (vertical scaling) still hits a limit. If that machine dies, the website dies.
 
-3. **Advantages**
+```mermaid
+flowchart LR
+  U["Millions of requests<br/>from all over the world"] --> S["One DB server<br/>all data, all requests"]
+  S --> P1["Overloaded<br/>slow, may hang or crash"]
+  S --> P2["Single point of failure<br/>server down, so site down"]
+```
 
-   1. **Data redundancy:** The same data is stored on multiple servers. If any server fails for any reason, the data is available on the other servers.
-      - **Not harmful:** This is not the repetition of data that leads to anomalies (the same student stored repeatedly inside one database). Here the same data is replicated across different servers. Within one database it is not duplicated.
-      - **Required:** The redundancy that clustering offers is required. It is certain because of synchronisation. It is not always bad. Here it makes the system robust and highly available.
-      - **Example:** S1 shuts down (hacker attack, illegal activity detected, regular maintenance, or any problem with the node). With a single server, the website would go down. With replicas, S2 returns the same data. The user never knows whether data came from S1 or S2. The website stays on.
+## 2. Make replicas: the cluster
 
-      ```mermaid
-      flowchart LR
-        U["User"] --> S1["S1<br/>down"]
-        U --> S2["S2<br/>returns the same data"]
-        S1 -. "fails" .-> X["no reply"]
-      ```
-      - **Abstraction:** A layer of abstraction is added. The user does not know whether data comes from S1, S2 or S3. This is hidden from the user.
+You put the same data on three servers. This group of identical servers is one cluster, also called a replica set.
 
-   2. **Load balancing:** Load balancing (scalability) does not come by default with a database. Clustering has to bring it. It also depends on the setup.
-      - **What it does:** It allocates the workload among the different servers in the cluster. One machine does not get all the hits.
-      - **Benefit:** More users can be supported. If traffic spikes, there is higher assurance that the new traffic is supported. Scaling is seamless.
-      - **Link to availability:** This links directly to high availability. Without load balancing, one machine could get overworked and traffic would slow down. Then traffic would drop to zero.
-      - **Single server:** With one server and millions of requests, the server handles all of them sequentially. It gets highly loaded and may hang or crash.
-      - **With replicas:** Give some requests to S1, some to S2 and some to S3. The load is balanced and no system crashes.
-      - **Why balance:** Requests execute fast (an overloaded server delays them). No single server crashes. Both point to availability.
-      - **Load balancer:** This needs a layer, logic or interface called the load balancer. Requests arrive at the load balancer. It checks which server (S1, S2 or S3) is less loaded and passes the new request to it.
+```mermaid
+flowchart LR
+  subgraph Cluster["One cluster (replica set)"]
+    direction TB
+    S1["S1: D1<br/>1000 users"]
+    S2["S2: D2<br/>same 1000 users"]
+    S3["S3: D3<br/>same 1000 users"]
+  end
+  S1 <-. "sync: D1 = D2 = D3" .-> S2
+  S2 <-. "sync" .-> S3
+```
 
-      ```mermaid
-      flowchart LR
-        R["Requests"] --> LB["Load balancer<br/>picks the least loaded"]
-        LB --> S1["S1"]
-        LB --> S2["S2"]
-        LB --> S3["S3"]
-      ```
-      - **Architecture:** With replica sets, the architecture needs a load balancer.
+| Term | Meaning |
+|---|---|
+| Database clustering | It is running more than one server that holds the same database. |
+| Cluster | It is the group of servers (nodes) that hold the same data. |
+| Replica | It is one copy of the full database on one server. |
+| Node / server / host | It is a machine that stores data, takes requests and sends replies. |
+| Used with | It is common in NoSQL (MongoDB replica sets) but works with SQL too. |
 
-   3. **High availability:** If you can access a database, it is available. High availability is the amount of time a database is considered available.
-      - **How much:** The availability you need depends on the number of transactions you run and how often you run analytics on your data.
-      - **How clustering helps:** Load balancing and extra machines give extremely high availability. If a server shuts down, the database is still available.
-      - **Backup:** If S1 goes down, S2 and S3 are available as backup. At any point of time, some server will execute the request.
-      - **Goal:** The website should always stay on.
+## 3. S1 crashes, the site stays up
 
-4. **How does clustering work?**
+A hacker attack takes S1 down. S2 still holds the same data, so it answers. The user never knows which server replied.
 
-   1. In cluster architecture, requests are split across many computers. One user request is executed and produced by a number of computer systems.
-      - **Basis:** Clustering works because of load balancing and high availability.
-      - **Failure:** If one node collapses, another node handles the request. So there are few or no chances of a total system failure.
-      - **Routing:** The load balancer sends each incoming request to the less loaded server (node).
-      - **Real life:** Big product-based companies use it for internet products. It ensures high availability and a seamless user experience. The website never goes down.
+```mermaid
+flowchart LR
+  U["User asks for order 21"] --> S1["S1<br/>down"]
+  S1 -. "no reply" .-> X["fails"]
+  U --> S2["S2<br/>returns order 21"]
+  S2 --> OK["Site stays up"]
+```
+
+> **Interview:** Is this redundancy bad? No. Bad redundancy repeats data inside one DB and causes anomalies. Clustering copies the whole DB across servers on purpose, which makes the system robust.
+
+## 4. Traffic spikes: the load balancer
+
+A sale starts and traffic triples. A load balancer sits in front. It sends each request to the least loaded server.
+
+```mermaid
+flowchart LR
+  R["Requests 1, 2, 3, 4, 5, 6"] --> LB["Load balancer<br/>picks the least loaded server"]
+  LB -->|"1, 4"| S1["S1"]
+  LB -->|"2, 5"| S2["S2"]
+  LB -->|"3, 6"| S3["S3"]
+```
+
+Without it, one server takes every request in sequence and may crash.
+
+## 5. The three wins
+
+```mermaid
+flowchart TB
+  C["Clustering"]
+  C --> R["Data redundancy<br/>same data on every server"]
+  C --> L["Load balancing<br/>work spread across servers"]
+  C --> H["High availability<br/>some server always answers"]
+  R --> H
+  L --> H
+```
+
+| Advantage | What it gives |
+|---|---|
+| Data redundancy | If one server fails, the others still have the data. |
+| Load balancing | No single server is overloaded, so requests run fast. |
+| High availability | The database stays reachable even when a node dies. |
+| Abstraction | The user does not know which server served the request. |
+
+## 6. How it works, end to end
+
+Each request goes to the load balancer, then to a healthy, lightly loaded node. If a node collapses, another node takes the request. Total failure is very unlikely.
+
+```mermaid
+flowchart LR
+  U["User request"] --> LB["Load balancer"]
+  LB --> Q{"S1 healthy<br/>and least loaded?"}
+  Q -- "Yes" --> S1["S1 serves it"]
+  Q -- "No" --> S2["S2 or S3 serves it"]
+```
