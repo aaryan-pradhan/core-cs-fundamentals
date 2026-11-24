@@ -1,170 +1,167 @@
-# Lecture 18: Partitioning & Sharding in DBMS (DB Optimisation)
+# Lecture 18: Partitioning and Sharding
 
-## LEC-18: Partitioning & Sharding in DBMS (DB Optimisation)
+> **The story:** You built a photo app. It went viral. Its User table now has 100K users and millions of requests. One DB server can no longer cope.
 
-### Context: why DB optimisation techniques are needed
+## 1. One server is drowning
 
-- **Two problems:** A DBMS makes storing data easy. A very large system has two problems: huge data and a huge number of requests.
-- **Huge data:** An application serving masses (for example a website hosted on the cloud with a live event) has data that is hard to manage on a single node. Manageability suffers.
-- **Huge requests:** A single node cannot serve millions of requests properly. At some point the system may crash, or its response time becomes very high.
-- **Fix:** Distribute the data. The result is a distributed database.
-- **Goal:** DB optimisation techniques make data easily manageable and reduce response time.
-
-**Option 1: Scale up (vertical scaling, increase hardware).**
-
-1. Example: a 1 TB disk becomes 2 TB. CPU and RAM are doubled.
-2. In practice, response time does not become half when everything is doubled.
-3. Cost increases a lot (disk, CPU, RAM). It is an expensive bet and not logical in terms of money.
-
-**Option 2: Clustering (replica set).**
-
-1. Copies of the same DB instance are made, so all data is replicated (redundancy).
-2. There is a master node and replicas. Updates always come to the master. The master propagates them to the replicas.
-3. Propagation causes delay, and it has to be managed.
-4. **Problem:** One replica may be updated while another is not yet updated.
-
-**A better way: partitioning.** It is a level above clustering.
-
-- **Scale out:** Partitioning is a scale-out (horizontal scaling) technique. The capacity of a single node is not increased. Data is split and new nodes are added.
-- **Versus clustering:** Clustering is also horizontal scaling, because new nodes are added. But there the whole data is copied. In partitioning, the data is divided between servers.
+The single server faces two problems at once. Huge data makes it hard to manage. Huge request volume makes it slow or makes it crash.
 
 ```mermaid
 flowchart LR
-  subgraph C["Clustering: whole data copied"]
-    direction TB
-    M["Master: all data"] -- "propagate updates" --> R1["Replica: all data"]
-    M -- "propagate updates" --> R2["Replica: all data"]
-  end
-  subgraph P["Partitioning: data divided"]
-    direction TB
-    P1["S1: part 1"]
-    P2["S2: part 2"]
-  end
+  U["Millions of requests"] --> S["One DB server<br/>User table: 100K rows"]
+  S --> P1["Problem 1: huge data<br/>hard to manage"]
+  S --> P2["Problem 2: huge requests<br/>slow response, may crash"]
+  P1 --> F["Fix: distribute the data<br/>= distributed database"]
+  P2 --> F
 ```
 
----
+## 2. Three ways out
 
-1. **Idea of partitioning:** A big problem is solved easily when it is chopped into smaller sub-problems.
-   - Partitioning divides a big database (data, metrics and indexes) into smaller, handy slices called **partitions**.
-   - SQL queries use partitioned tables directly, without any alteration.
-   - Once the database is partitioned, the data definition language works on the smaller slices instead of the giant database. This cuts down the problems in managing large tables.
+You weigh three options. Partitioning wins because it splits the data instead of copying it.
 
-2. **Partitioning across servers:** Partitioning divides stored database objects across separate servers. This increases performance and controllability of the data. We can manage huge chunks of data optimally.
-   - **Problem with scale out:** When we scale out machines, relational databases give a hard time, because it is tough to maintain the relations.
-   - **Solution:** Apply partitioning to a database that is already scaled out (equipped with multiple servers). Partition the database among those servers and handle the big data easily.
-   - **When applied:** When response time has increased because the data is huge and traversing it takes a lot of time.
-   - **Example:** A Student table (name, id, class, address, phone number) with a huge number of students.
+```mermaid
+flowchart TB
+  Q["How to handle more load?"]
+  Q --> A["Scale up<br/>1 TB to 2 TB, double CPU and RAM<br/>costly, time does not halve"]
+  Q --> B["Clustering<br/>copy ALL data to replicas<br/>master propagates updates, lag"]
+  Q --> C["Partitioning<br/>SPLIT data across servers<br/>scale out, cheap machines"]
+```
 
-3. **Vertical partitioning**
-   1. Slice the relation vertically (column-wise).
-      - Example: the first two columns go to server S1. The other two columns go to server S2.
-   2. Different servers must be accessed to get complete tuples.
-      - To get the complete information of one tuple, both servers must be accessed.
+| Option | Scaling type | What happens to data | Catch |
+|---|---|---|---|
+| Scale up | Vertical | One bigger machine holds it all. | It is costly, and time does not halve. |
+| Clustering | Horizontal | Every node holds a full copy. | Replicas lag behind the master. |
+| Partitioning | Horizontal | Each node holds only a part. | Relations across servers are harder. |
 
-4. **Horizontal partitioning**
-   1. Slice the relation horizontally (row-wise).
-      - Example: roll no 1 to 25K on S1 and roll no 25K to 100K on S2.
-   2. Independent chunks of data tuples are stored on different servers.
-      - Students 1 to 10000 are fetched from S1 only, so S1 is independent of S2.
+## 3. Cut by columns: vertical partitioning
 
-   | Type | Slice | Example | Complete tuple |
-   |------|-------|---------|----------------|
-   | Vertical | Columns | Two columns on S1, two on S2 | Needs both servers |
-   | Horizontal | Rows | Roll no 1 to 25K on S1, rest on S2 | One server |
+You first slice the table by columns. Small, hot columns go to S1, and heavy columns go to S2.
 
-   ```mermaid
-   flowchart LR
-     T["Student<br/>name | id | class | address | phone"]
-     T -- "vertical: by columns" --> V1["S1: name, id"]
-     T -- "vertical" --> V2["S2: class, address, phone"]
-     T -- "horizontal: by rows" --> H1["S1: roll no 1 to 25K<br/>(full tuples)"]
-     T -- "horizontal" --> H2["S2: roll no 25K to 100K<br/>(full tuples)"]
-   ```
+| user_id | name | bio | photo |
+|---|---|---|---|
+| 1 | Asha | loves cats | a.jpg |
+| 2 | Ben | runner | b.jpg |
 
-5. **When is partitioning applied?**
-   1. The dataset becomes so huge that managing it is a tedious task.
-   2. The number of requests is so large that access to a single DB server takes huge time. So the response time of the system becomes high.
-      - **Main reason:** This is the more important and better reason to apply partitioning. Tables are then divided horizontally or vertically.
+```mermaid
+flowchart LR
+  T["User(user_id, name, bio, photo)"] -- "split columns" --> S1["S1<br/>user_id, name<br/>1 Asha / 2 Ben"]
+  T -- "split columns" --> S2["S2<br/>user_id, bio, photo<br/>1 cats a.jpg / 2 runner b.jpg"]
+  S1 --> J["Full row of Asha?<br/>read S1 AND S2"]
+  S2 --> J
+```
 
-6. **Advantages of partitioning**
-   1. **Parallelism**
-      - Chunk 1 is on S1 and chunk 2 is on S2.
-      - Incoming requests are filtered by the key (for example id 1 to 10000 on S1, the rest on S2). Each request goes to the server holding its data. So requests are served in parallel.
+## 4. Cut by rows: horizontal partitioning
 
-      ```mermaid
-      flowchart LR
-        Q1["Request id 42"] --> S1["S1: id 1 to 10000"]
-        Q2["Request id 50000"] --> S2["S2: rest"]
-      ```
-   2. **Availability**
-      - All DB optimisation techniques increase availability (as in clustering).
-      - If node S1 crashes, only the requests for S1's data are affected, not all of them.
-   3. **Performance**
-      - Each server is less loaded. If all the data were on one system, it would be more loaded and processing would take more time.
-      - Requests are also divided between servers, so response time decreases.
-   4. **Manageability**
-      - A DBA who has to change something for students 1 to 10000 goes to S1 only, and it is quicker. Likewise for S2.
-      - It gives a bird's-eye view: this half of the data is here, so work on it here.
-   5. **Reduced cost:** Scaling up (vertical scaling) might be costly.
-      - Instead of one big costly machine, use more machines of smaller capacity.
-      - Each machine gets only part of the requests.
+You then slice the table by rows instead. Each server holds full rows for one range of user_id.
 
-7. **Distributed database**
-   1. A single logical database that is spread across multiple locations (servers) and logically interconnected by a network.
-      - After partitioning, data sits on different servers. Logically it is still the same database (for example the Student table, or a university database).
-   2. It is the product of applying DB optimisation techniques like **clustering, partitioning and sharding.**
-   3. **Why it is needed:** Read point 5.
-      - Requests have increased and data has become huge, so DB optimisation techniques are applied.
+```mermaid
+flowchart LR
+  T["User table<br/>100K rows"] -- "user_id 1 to 10K" --> S1["S1<br/>1 Asha ... 10000 Zoe<br/>full rows"]
+  T -- "user_id 10K to 100K" --> S2["S2<br/>10001 Amit ... 100000 Yuki<br/>full rows"]
+  S1 --> I["Full row of Asha?<br/>read S1 only"]
+```
 
-8. **Sharding**
-   1. Sharding is a technique to implement horizontal partitioning.
-      - It is an extension of partitioning.
-   2. **Fundamental idea:** Instead of having all the data sit on one DB instance, we split it up. We introduce a **routing layer** to forward each request to the instance that holds the data.
-      - **Example:** Student data. Roll no 1 to 10K is stored on S1. The rest, up to 100K, is stored on S2. This is a horizontal partition (tuple-wise: the full tuple goes to one node).
-      - **Shard:** Each part is called a shard. Shard 1 holds roll no 1 to 10K. Shard 2 holds roll no above 10K to 100K. Each shard is stored on its own server. "Shard" is just a name.
-      - **Independence:** Shards are independent. A request for roll no 1 to 10K goes to S1. Other requests go to S2.
-      - **Routing layer:** It is a layer written in the application layer (software). It decides which shard a request goes to (S1 or S2). It is additional logic, a lookup (an intermediate layer). It is needed whenever sharding is applied.
+| Type | Slices by | Example | Full row needs |
+|---|---|---|---|
+| Vertical | Columns | Name on S1, photo on S2 | It needs both servers. |
+| Horizontal | Rows | Users 1–10K on S1, the rest on S2 | It needs one server. |
 
-      ```mermaid
-      flowchart LR
-        App["Request (roll no)"] --> RL{"Routing layer<br/>look up shard key"}
-        RL -- "roll no 1 to 10K" --> SH1["Shard 1 on S1"]
-        RL -- "roll no above 10K" --> SH2["Shard 2 on S2"]
-      ```
-      - **Invoice example:** An Invoice table has its data split between Database Shard 1 and Database Shard 2 (one colour of rows on each). The split is made on a custom id (customer id), not on the primary key (invoice id).
-      - **Shard key (partition key):** The column on which the split is made. In the Student table it was student (roll no). In the Invoice table the primary key is invoice id, but the shard key can be something else (customer id).
-      - **Interviews and industry:** Partitioning and sharding are used as the same thing (vertical sharding, horizontal sharding). They are not exactly synonyms. By theory, sharding is a way of horizontal partitioning.
-   3. **Pros**
-      1. **Scalability**
-         - It is a technique to increase scalability (scale out).
-         - Parallelism, availability, manageability and lower cost also follow, as listed above.
-      2. **Availability**
-   4. **Cons**
-      1. **Complexity:** You must make the partition mapping, implement a routing layer in the system, and handle non-uniformity, which creates the need for re-sharding.
-         - **Mapping:** You must identify which shard a request belongs to, based on the partition key. This needs an additional routing layer which you write yourself.
-         - **Non-uniformity:** The shard key should divide the data uniformly (for example 3 rows to each node out of 6). If the shard key is not the primary key, one key value can have far more rows (for example customer id 2 has placed 10,000 orders). Then that shard gets much more data than the other. The division becomes non-uniform and the original problem comes back.
+## 5. Why partitioning pays off
 
-         ```mermaid
-         flowchart LR
-           K["Shard key: customer id"] --> A["Shard 1<br/>customer 2: 10,000 orders"]
-           K --> B["Shard 2<br/>other customers: few orders"]
-           A -. "overloaded, so re-shard" .-> K
-         ```
-         - **Re-sharding:** Handling this is your responsibility. Re-shard from time to time. That means you change the partition key and shard again.
-      2. **Not well suited for analytical queries,** because the data is spread across different DB instances. This is the **scatter-gather problem.**
-         - **Example:** An Invoice table has an amount column. The query is the total amount ordered by each customer. On a single node, one aggregation function (SUM) in SQL would answer it.
-         - **With sharding:** The data is on multiple nodes. The query goes to the first node and finds its sum. It goes to the second node and finds its sum. Then both sums are combined.
+Requests now spread across servers. Each server holds less and serves less.
 
-         ```mermaid
-         flowchart LR
-           Q["SUM(amount) per customer"] -- "scatter" --> N1["Node 1: partial sum"]
-           Q -- "scatter" --> N2["Node 2: partial sum"]
-           N1 -- "gather" --> G["Combine the sums"]
-           N2 -- "gather" --> G
-         ```
-         - **Cost:** Another layer (or the DBMS) has to handle this. This adds complexity.
+```mermaid
+flowchart LR
+  R1["Request user 42"] --> S1["S1: users 1 to 10K"]
+  R2["Request user 50000"] --> S2["S2: users 10K to 100K"]
+  S1 -. "S1 crashes?" .-> X["Only users 1 to 10K are affected"]
+```
 
-- **Trade-off:** You have to give up something to gain something. Pros come with cons. Sharding and partitioning are still used a lot.
-- **Clustering, partitioning and sharding:** All three are very important. Know the core idea of each for system design interview questions on how to optimise a system.
+| Advantage | What it means |
+|---|---|
+| Parallelism | Different servers answer different requests at the same time. |
+| Availability | A crash on one server affects only its part of the data. |
+| Performance | Each server is less loaded, so response time drops. |
+| Manageability | A DBA fixes users 1–10K on S1 only. |
+| Reduced cost | Many small machines are cheaper than one huge one. |
 
-> **Interview:** You have a large number of requests on one system and must reduce response time. Shard the data across different nodes. Write a routing layer that sends each request to its particular shard. This gives manageability, scale out, scalability, availability, parallelism and performance. It avoids scaling up (vertical scaling is costly).
+Apply partitioning when the data is too big to manage or when requests make a single server slow. Heavy request load is the stronger reason.
+
+## 6. Still one database: distributed database
+
+The data now lives on many servers. To the app, it is still one logical database.
+
+```mermaid
+flowchart TB
+  L["One logical DB<br/>User table"] --- N1["Server S1"]
+  L --- N2["Server S2"]
+  L --- N3["Server S3"]
+  N1 -. "network" .- N2
+  N2 -. "network" .- N3
+```
+
+A distributed database is the result of clustering, partitioning and sharding.
+
+## 7. Sharding: add a routing layer
+
+Sharding is how you implement horizontal partitioning. Each part is a shard, and a routing layer in your app sends each request to the right shard.
+
+```mermaid
+flowchart LR
+  A["Request: user 42"] --> RL{"Routing layer<br/>(app code)<br/>look up shard key"}
+  RL -- "user_id 1 to 10K" --> SH1["Shard 1 on S1"]
+  RL -- "user_id above 10K" --> SH2["Shard 2 on S2"]
+```
+
+The shard key need not be the PK. An Invoice table has PK invoice_id, but you can shard it by customer_id.
+
+| Term | Meaning |
+|---|---|
+| Shard | A shard is one horizontal part of the table, on its own server. |
+| Shard key | The shard key is the column used to split rows. It is also called the partition key. |
+| Routing layer | The routing layer is app code that maps each request to its shard. |
+| Re-sharding | Re-sharding means choosing a new shard key and splitting the data again. |
+
+> **Interview:** People use "partitioning" and "sharding" as the same word. Strictly, sharding is a way to do horizontal partitioning.
+
+## 8. Trouble 1: one shard gets too hot
+
+You shard invoices by customer_id. Then customer 2 places 10,000 orders, and shard 1 overloads.
+
+```mermaid
+flowchart LR
+  K["Shard key: customer_id"] --> A["Shard 1<br/>customer 2: 10,000 orders<br/>overloaded"]
+  K --> B["Shard 2<br/>other customers: few orders"]
+  A -. "non-uniform, so re-shard" .-> K
+```
+
+A good shard key spreads rows evenly. A bad one recreates the original problem, so you must re-shard from time to time.
+
+## 9. Trouble 2: analytics need scatter-gather
+
+The finance team asks for the total amount per customer. On one server, a single `SUM` would do. With shards, the query must visit every shard and combine the parts.
+
+```mermaid
+flowchart LR
+  Q["SUM(amount) per customer"] -- "scatter" --> N1["Shard 1: partial sum"]
+  Q -- "scatter" --> N2["Shard 2: partial sum"]
+  N1 -- "gather" --> G["Combine the sums"]
+  N2 -- "gather" --> G
+```
+
+| Pros of sharding | Cons of sharding |
+|---|---|
+| It scales out to more servers. | You must build the mapping and the routing layer. |
+| It keeps the other shards available when one fails. | A skewed shard key forces re-sharding. |
+| It serves requests in parallel. | Analytical queries need scatter-gather. |
+
+## 10. The interview answer
+
+The interviewer says: "One system gets a huge number of requests. Reduce the response time."
+
+```mermaid
+flowchart LR
+  P["Huge requests on one DB"] --> S["Shard the data<br/>across nodes"] --> R["Write a routing layer<br/>that sends each request<br/>to its shard"]
+  R --> G["You gain scale out, parallelism,<br/>availability, performance,<br/>manageability, lower cost"]
+  R --> X["You avoid scale up<br/>which is costly"]
+```
