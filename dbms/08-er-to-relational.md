@@ -1,316 +1,220 @@
-# Lecture 8: Transform - ER Model to Relational Model
+# Lecture 8: ER Model to Relational Model
 
-1. Both the ER model and the relational model are abstract logical representations of real-world enterprises. They follow similar design principles, so we can convert an ER design into a relational design.
-   - **DB design order:** First the ER model, which gives the ER diagram. Then the relational model, which gives the conceptual schema of the whole DB as tables.
-   - **Relations between tables:** They are shown with FKs. Referential constraints apply.
-   - **Conversion decides:** How many tables, which PKs, which FKs, and how relationships are shown.
-   - **Running example:** The Banking System ER diagram (Lecture 5). It has strong entities, a weak entity, a weak relationship, a generalisation and a unary relationship.
-2. Converting a DB representation from an ER diagram to a table format is how we reach a relational DB design from an ER diagram.
-3. ER diagram notations to relations:
+> **The story:** You built the ER diagram for a bank. Now you must turn every shape in it into tables. Each panel converts one shape.
 
-   1. **Strong Entity**
-      1. It becomes an **individual table** with the entity name. Its attributes become columns of the relation.
-      2. The entity's Primary Key (PK) is used as the relation's PK.
-      3. **FKs** are added to establish relationships with other relations.
-      - **Table name:** the entity name.
-      - **Columns:** Single-valued attributes become columns. Multivalued, composite and derived attributes are handled separately (see below).
-      - **Example:** Loan is a strong entity. Its table is `loan (loan-number, amount)`.
+## 1. The big picture
 
-   2. **Weak Entity**
-      1. A table is formed with all the attributes of the entity.
-      2. The PK of its corresponding strong entity is added as an **FK**.
-      3. The **PK** of the relation is a composite PK: {FK + partial discriminator key}.
-      - A weak entity has no existence of its own. It totally participates in a strong entity.
-      - **Example:** Payment is a weak entity of Loan. Its table has its own 3 attributes plus a 4th column, loan-number (the PK of Loan).
-      - loan-number is also an FK in the payment table.
-      - **PK:** {loan-number, payment-number}. The discriminator (payment-number) alone cannot be a PK, because the weak entity depends on the strong entity.
+The ER diagram says what exists. The tables say how to store it. Conversion decides the tables, the PKs and the FKs.
 
-      ```mermaid
-      erDiagram
-          loan ||--o{ payment : "loan payment"
-          loan {
-              int loan_number PK
-              int amount
-          }
-          payment {
-              int loan_number PK, FK
-              int payment_number PK "discriminator"
-              date payment_date
-              int payment_amount
-          }
-      ```
+```mermaid
+flowchart LR
+  E["ER diagram<br/>(bank)"] -->|"convert each shape"| T["Tables<br/>+ PKs + FKs"] -->|"CREATE TABLE"| R["RDBMS"]
+```
 
-   3. **Single Values Attributes**
-      1. They are represented directly as **columns** in the tables (relations).
-      - Each one simply adds one column to the relation.
+## 2. Strong entity: Loan gets its own table
 
-   4. **Composite Attributes**
-      1. Create a separate column in the original relation for each component of the composite attribute.
-      2. **Example:** **Address** {street-name, house-no} is a composite attribute in the customer relation. We add address-street-name and address-house-name as new columns and ignore "address" as an attribute.
-      - **Rule:** Break the composite attribute into its components. Each component becomes its own column.
-      - **Example:** Customer has Address, and street is itself composite. That gives 5 components, so the columns are address-city, address-state, address-pin-code, address-street-number and address-street-name. Other attributes (customer-name etc.) stay.
+Loan stands on its own. It becomes a table, and its key becomes the PK.
 
-      ```mermaid
-      erDiagram
-          customer {
-              int customer_id PK
-              string customer_name
-              string address_street_name "from address.street"
-              string address_street_number "from address.street"
-              string address_city "from address"
-              string address_state "from address"
-              string address_pin_code "from address"
-          }
-      ```
+```mermaid
+flowchart LR
+  E["Strong entity<br/>Loan(loan_no, amount)"] --> T["Table loan<br/>PK = loan_no"]
+```
 
-   5. **Multivalued Attributes**
-      1. Create a **new table** for each multivalued attribute. It is named after the original attribute.
-      2. The PK of the entity is used as an **FK** column in the new table.
-      3. The multivalued attribute's name is added as a column to hold the multiple values.
-      4. The **PK** of the new table is {FK + multivalued name}.
-      5. **Example:** In the strong entity **Employee**, **dependent-name** is a multivalued attribute.
-         1. A new table named dependent-name is formed with columns emp-id and dname.
-         2. PK: {emp-id, name}
-         3. FK: {emp-id}
-      - **Why not a column in the employee table:** One emp-id can have many dependents (father, mother, brother, wife; 3-4 entries). That would repeat all other employee attributes for every dependent.
-      - emp-id in the new table is an FK referencing the employee table's PK.
-      - Both columns together form the PK.
-      - **Example data:** emp-id 1 can have several rows, one per dependent name.
+| loan_no (PK) | amount |
+|---|---|
+| L1 | 50000 |
+| L2 | 20000 |
 
-      ```mermaid
-      erDiagram
-          employee ||--o{ dependent_name : "has"
-          employee {
-              int emp_id PK
-              string name
-          }
-          dependent_name {
-              int emp_id PK, FK
-              string dname PK
-          }
-      ```
+## 3. Weak entity: Payment cannot live without Loan
 
-   6. **Derived Attributes:** They are not considered in the tables.
-      - They are only an ER diagram notation. They are not stored, because they can be calculated directly (for example, through an API or query).
-      - **Example:** Age is calculated from DOB and the current date, so there is no place for it in the table.
+Payment 1 exists for loan L1 and for loan L2. So payment_no alone cannot be the PK. Borrow the loan's PK.
 
-   7. **Generalisation**
-      1. **Method-1:** Create a table for the higher-level entity set. For each lower-level entity set, create a table with a column for each of its own attributes, plus a column for each attribute of the primary key of the higher-level entity set.
+```mermaid
+flowchart LR
+  W["Weak entity<br/>Payment(payment_no, date, amt)"] --> A["Add loan_no<br/>as FK"] --> P["PK = {loan_no, payment_no}<br/>FK + discriminator"]
+```
 
-         Example: the Banking System generalisation of Account into savings and current.
-         1. Table 1: account (account-number, balance)
-         2. Table 2: savings-account (account-number, interest-rate, daily-withdrawal-limit)
-         3. Table 3: current-account (account-number, overdraft-amount, per-transaction-charges)
-         - There is one table for the higher-level (generalised) entity and one table each for the lower-level entities.
-         - The PK of the lower-level tables is the PK of the generalised entity (account-number).
-
-         ```mermaid
-         erDiagram
-             account ||--o| savings_account : "is a"
-             account ||--o| current_account : "is a"
-             account {
-                 int account_number PK
-                 int balance
-             }
-             savings_account {
-                 int account_number PK, FK
-                 float interest_rate
-                 int daily_withdrawal_limit
-             }
-             current_account {
-                 int account_number PK, FK
-                 int overdraft_amount
-                 int per_transaction_charges
-             }
-         ```
-      2. **Method-2:** This is an alternative. It works only if the generalisation is disjoint and complete.
-         - **Disjoint:** No entity is a member of two lower-level entity sets directly below a higher-level entity set.
-         - **Complete:** Every entity in the higher-level entity set is also a member of one of the lower-level entity sets.
-         - **Rule:** Do not create a table for the higher-level entity set. For each lower-level entity set, create a table with a column for each of its own attributes, plus a column for each attribute of the higher-level entity set.
-
-         Tables would be:
-         1. Table 1: savings-account (account-number, balance, interest-rate, daily-withdrawal-limit)
-         2. Table 2: current-account (account-number, balance, overdraft-amount, per-transaction-charges)
-         - The account table is dropped. Its attributes (balance) are copied into both lower-level tables. account-number is still the PK in both.
-
-         ```mermaid
-         erDiagram
-             savings_account {
-                 int account_number PK
-                 int balance "copied from account"
-                 float interest_rate
-                 int daily_withdrawal_limit
-             }
-             current_account {
-                 int account_number PK
-                 int balance "copied from account"
-                 int overdraft_amount
-                 int per_transaction_charges
-             }
-         ```
-      3. **Drawbacks of Method-2:**
-         - **Overlapping generalisation:** Some values, such as balance, are stored twice.
-         - **Incomplete generalisation:** Accounts that are neither savings nor current cannot be represented.
-         - **Overlapping, in detail:** One account number provides both savings and current features (not two accounts). It needs an entry in both tables, so the same balance is stored twice. With Method-1 the balance is stored once, in the account table.
-         - **Incomplete, in detail:** A third account type not stored in the DB has no table, so it has nowhere to be stored.
-      - **Choosing:** It depends on the use case. Method-2 looks better at a glance (only 2 tables). But Method-1 is simpler, and the requirement may force it.
-
-   8. **Aggregation**
-      1. Make a table for the relationship set.
-      2. Its attributes include the primary keys of the entity set and of the aggregation set's entities.
-      3. Also add a descriptive attribute, if any, on the relationship.
-      - **Recall (Lecture 4):** Job, employee and branch form a ternary relationship. It is aggregated as "works-on". A relationship between the works-on aggregation and the manager entity says the manager manages that combination (an employee with a particular job at a particular branch).
-      - **Table:** Make a table named after the relationship between the aggregated entity and the normal (strong) entity: manages.
-      - **Columns:** The PKs of all participants: manager-id (manager), emp-id (employee), job-id (job), branch-id (branch).
-      - **PK:** All of these together form a composite PK.
-
-      ```mermaid
-      erDiagram
-          manager ||--o{ manages : ""
-          employee ||--o{ manages : ""
-          job ||--o{ manages : ""
-          branch ||--o{ manages : ""
-          manages {
-              int manager_id PK, FK
-              int emp_id PK, FK
-              int job_id PK, FK
-              int branch_id PK, FK
-          }
-      ```
-
-   9. **Unary Relationship**
-      - **One-to-many** (for example, employee managed by employee, mapping cardinality 1:N):
-         1. The employee table already has emp-id. A manager is himself an employee.
-         2. Add the manager's emp-id as one more column (manager-id) in the same employee table. Treat it as an FK referencing the employee table's own PK.
-         3. **Example:** Employees 201 and 202 are both managed by 205. One manager can manage many employees.
-         4. The manager column can be NULL. A person may have no manager (for example, the CEO).
-
-         ```mermaid
-         erDiagram
-             employee |o--o{ employee : "manager_id references emp_id"
-             employee {
-                 int emp_id PK
-                 string name
-                 int manager_id FK "NULL for the CEO"
-             }
-         ```
-      - **One-to-one** (for example, Person married to Person, monogamy):
-         1. The Person table has id, name, spouse-id.
-         2. spouse-id behaves like an FK. id is the PK.
-
-         ```mermaid
-         erDiagram
-             person |o--o| person : "spouse_id references id"
-             person {
-                 int id PK
-                 string name
-                 int spouse_id FK
-             }
-         ```
-      - **Many-to-many** (for example, Course with prerequisite course; a course may need other courses first, such as computer needing physics and maths first):
-         1. The entity table exists anyway: course (id, title). PK is id.
-         2. Make a second table named after the relationship: prereq (id, prereq-course-id).
-         3. Both columns are course ids, so both are FKs referencing the PK of course.
-         4. Both together form the composite PK.
-
-         ```mermaid
-         erDiagram
-             course ||--o{ prereq : "id"
-             course ||--o{ prereq : "prereq_course_id"
-             course {
-                 int id PK
-                 string title
-             }
-             prereq {
-                 int id PK, FK
-                 int prereq_course_id PK, FK
-             }
-         ```
-
-# Facebook ER Model to Relational Model
-
-Converting the Facebook ER diagram (Lecture 6, social media website) with the rules above gives 9 tables (relations). They can then be implemented in an RDBMS with SQL commands (for example, MySQL).
-
-1. **user-profile** (strong entity): user-name (PK), password, dob. All attributes are single-valued.
-2. **user-profile-email:** Email is multivalued, so it gets a new table.
-   - user-name is an FK. Email is one single-valued column.
-   - PK is {user-name, email} (composite).
-3. **user-profile-contact:** Contact is also multivalued, so it gets a separate table made the same way.
-4. **friendship:** It is a unary relationship between user-profile and user-profile, so it gets a separate table.
-   - **Columns:** the profile that requested and the profile that accepted.
-   - Both are FKs referencing user-profile's PK (user-name).
-   - Both together form the PK (a compound key: a key made by combining two FKs).
-5. **post-like** (strong entity): post-like-id (PK), time-stamp, plus two FKs.
-   - **post-id (FK):** It shows the "has" relationship with user-post. With it you can find which post has how many likes.
-   - **user-name (FK, PK of user-profile):** It shows the "can" relationship: a user can like a post.
-6. **user-post:** post-id (PK), its other attributes, and user-name as FK (the "post" relationship) referencing user-profile.
-   - The link between user-post and user-profile is via user-name.
-   - The "has" relationship is shown in the other tables (post-like, post-comment) through post-id.
-7. **user-post-image:** Image is multivalued (a post can have many images), so it gets a new table.
-   - **Columns:** post-id (FK, the PK of user-post) and image-url (each image has its own URL).
-   - Together they form the PK.
-8. **user-post-video:** Same as above, for video (multivalued).
-9. **post-comment:** post-comment-id (PK), text-content, time-stamp (its single-valued attributes).
-   - A comment is made by a user profile. So user-name (PK of user-profile) is added as an FK to handle the "comments" relationship.
-   - post-id (PK of user-post) is added as an FK to handle the "has" relationship.
-   - So it has two FKs.
+| loan_no (PK, FK) | payment_no (PK) | amt |
+|---|---|---|
+| L1 | 1 | 5000 |
+| L1 | 2 | 5000 |
+| L2 | 1 | 2000 |
 
 ```mermaid
 erDiagram
-    user_profile ||--o{ user_profile_email : "multivalued email"
-    user_profile ||--o{ user_profile_contact : "multivalued contact"
-    user_profile ||--o{ friendship : "requested"
-    user_profile ||--o{ friendship : "accepted"
-    user_profile ||--o{ user_post : "posts"
-    user_profile ||--o{ post_like : "likes"
-    user_profile ||--o{ post_comment : "comments"
-    user_post ||--o{ post_like : "has"
-    user_post ||--o{ post_comment : "has"
-    user_post ||--o{ user_post_image : "multivalued image"
-    user_post ||--o{ user_post_video : "multivalued video"
-    user_profile {
-        string user_name PK
-        string password
-        date dob
-    }
-    user_profile_email {
-        string user_name PK, FK
-        string email PK
-    }
-    user_profile_contact {
-        string user_name PK, FK
-        string contact PK
-    }
-    friendship {
-        string requester_user_name PK, FK
-        string accepter_user_name PK, FK
-    }
-    user_post {
-        int post_id PK
-        string content
-        datetime created_time
-        datetime modified_time
-        string user_name FK
-    }
-    user_post_image {
-        int post_id PK, FK
-        string image_url PK
-    }
-    user_post_video {
-        int post_id PK, FK
-        string video_url PK
-    }
-    post_like {
-        int post_like_id PK
-        datetime time_stamp
-        int post_id FK
-        string user_name FK
-    }
-    post_comment {
-        int post_comment_id PK
-        string text_content
-        datetime time_stamp
-        int post_id FK
-        string user_name FK
-    }
+  loan ||--o{ payment : "loan payment"
+  loan {
+    string loan_no PK
+    int amount
+  }
+  payment {
+    string loan_no PK, FK
+    int payment_no PK "discriminator"
+    int amt
+  }
 ```
+
+## 4. Four kinds of attributes, four fates
+
+A customer arrives with an address, many phone numbers and a birth date. Each attribute type is stored differently.
+
+```mermaid
+flowchart TB
+  A["Attribute type?"]
+  A -- "single-valued<br/>name" --> S["One column"]
+  A -- "composite<br/>address = street + city + pin" --> C["One column per part<br/>address_street, address_city, address_pin<br/>drop 'address' itself"]
+  A -- "multivalued<br/>dependents of emp 1" --> M["New table<br/>PK = {emp_id FK, dname}"]
+  A -- "derived<br/>age from DOB" --> D["Not stored<br/>calculate it in a query"]
+```
+
+Employee 1 has three dependents. A new table stores one row per dependent.
+
+| emp_id (PK, FK) | dname (PK) |
+|---|---|
+| 1 | Father |
+| 1 | Mother |
+| 1 | Wife |
+
+> **Why a new table?** A dependents column in employee would repeat every other employee column for each dependent.
+
+## 5. Generalisation: Account splits into Savings and Current
+
+The bank has one Account type with two kinds. There are two ways to store it.
+
+```mermaid
+flowchart TB
+  subgraph M1["Method 1: 3 tables"]
+    A1["account(acc_no PK, balance)"]
+    S1["savings(acc_no PK FK, interest_rate, daily_limit)"]
+    C1["current(acc_no PK FK, overdraft, txn_charge)"]
+    A1 --> S1
+    A1 --> C1
+  end
+  subgraph M2["Method 2: 2 tables, no parent table"]
+    S2["savings(acc_no PK, balance, interest_rate, daily_limit)"]
+    C2["current(acc_no PK, balance, overdraft, txn_charge)"]
+  end
+```
+
+| | Method 1 | Method 2 |
+|---|---|---|
+| Tables | It has a parent table plus one per child. | It has one table per child only. |
+| Parent attributes | They are stored once, in the parent. | They are copied into every child. |
+| When it works | It always works. | It works only if the split is disjoint and complete. |
+| Overlap problem | There is none. | An account that is both types stores balance twice. |
+| Incomplete problem | There is none. | A third account type has no table. |
+
+## 6. Aggregation: a manager manages a whole relationship
+
+Employee works on a job at a branch. A manager manages that whole combination. Make one table for the outer relationship.
+
+```mermaid
+flowchart LR
+  subgraph WO["Aggregation: works_on"]
+    E["employee"] --- J["job"] --- B["branch"]
+  end
+  M["manager"] -->|"manages"| WO
+  WO --> T["Table manages<br/>PK = {manager_id, emp_id, job_id, branch_id}<br/>all four are FKs"]
+```
+
+## 7. Unary relationship: a table points to itself
+
+Some relationships connect an entity to itself. The cardinality decides the shape.
+
+```mermaid
+flowchart TB
+  U["Unary relationship"]
+  U -- "1:N<br/>employee managed by employee" --> A["Add manager_id to employee<br/>FK to its own emp_id<br/>NULL for the CEO"]
+  U -- "1:1<br/>person married to person" --> B["Add spouse_id to person<br/>FK to its own id"]
+  U -- "M:N<br/>course needs prereq course" --> C["New table prereq<br/>PK = {course_id, prereq_id}<br/>both FKs to course"]
+```
+
+| emp_id (PK) | name | manager_id (FK) |
+|---|---|---|
+| 205 | Asha | NULL |
+| 201 | Ravi | 205 |
+| 202 | Meena | 205 |
+
+## 8. Facebook: the whole ER diagram becomes 9 tables
+
+Apply every rule above to the Facebook ER diagram. You get 9 tables.
+
+```mermaid
+erDiagram
+  user_profile ||--o{ user_profile_email : "multivalued"
+  user_profile ||--o{ user_profile_contact : "multivalued"
+  user_profile ||--o{ friendship : "requested"
+  user_profile ||--o{ friendship : "accepted"
+  user_profile ||--o{ user_post : "posts"
+  user_profile ||--o{ post_like : "likes"
+  user_profile ||--o{ post_comment : "comments"
+  user_post ||--o{ post_like : "has"
+  user_post ||--o{ post_comment : "has"
+  user_post ||--o{ user_post_image : "multivalued"
+  user_post ||--o{ user_post_video : "multivalued"
+  user_profile {
+    string user_name PK
+    string password
+    date dob
+  }
+  user_profile_email {
+    string user_name PK, FK
+    string email PK
+  }
+  user_profile_contact {
+    string user_name PK, FK
+    string contact PK
+  }
+  friendship {
+    string requester PK, FK
+    string accepter PK, FK
+  }
+  user_post {
+    int post_id PK
+    string content
+    string user_name FK
+  }
+  user_post_image {
+    int post_id PK, FK
+    string image_url PK
+  }
+  user_post_video {
+    int post_id PK, FK
+    string video_url PK
+  }
+  post_like {
+    int post_like_id PK
+    int post_id FK
+    string user_name FK
+  }
+  post_comment {
+    int post_comment_id PK
+    string text_content
+    int post_id FK
+    string user_name FK
+  }
+```
+
+| Table | Why it exists |
+|---|---|
+| user_profile | It is a strong entity. |
+| user_profile_email, user_profile_contact | Email and contact are multivalued. |
+| friendship | It is a unary M:N relationship. Its PK is a compound key of two FKs. |
+| user_post | It is a strong entity with user_name as FK. |
+| user_post_image, user_post_video | Image and video are multivalued. |
+| post_like, post_comment | Each one links a user to a post through two FKs. |
+
+## 9. Cheat sheet
+
+| ER shape | Becomes |
+|---|---|
+| Strong entity | It becomes its own table with its own PK. |
+| Weak entity | It becomes a table with PK = owner's PK (FK) + discriminator. |
+| Single-valued attribute | It becomes one column. |
+| Composite attribute | Each part becomes its own column. |
+| Multivalued attribute | It becomes a new table with PK = entity PK (FK) + value. |
+| Derived attribute | It is not stored. |
+| Generalisation | It becomes Method 1 (parent + children) or Method 2 (children only). |
+| Aggregation | It becomes a table holding the PKs of every participant. |
+| Unary 1:N or 1:1 | It becomes a self-referencing FK column. |
+| Unary M:N | It becomes a new table with two FKs to the same table. |
